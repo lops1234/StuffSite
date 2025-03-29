@@ -44,7 +44,6 @@ app.MapGet("/weatherforecast", (ILogger<Program> logger) =>
     .RequireAuthorization();
 
 app.Run();
-return;
 
 void ConfigureCors()
 {
