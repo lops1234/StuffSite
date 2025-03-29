@@ -29,15 +29,25 @@ public static class CorsConfiguration
             options.AddPolicy(CorsAllowSpecific,
                 policy =>
                 {
-                    policy.WithOrigins(allowedOrigins.IsNullOrEmpty()
-                            ? ["https://localhost:5173"]
-                            : allowedOrigins!.Split(", "))
-                        .WithMethods(allowedMethods.IsNullOrEmpty()
-                            ? ["GET", "POST", "PUT", "DELETE"]
-                            : allowedMethods!.Split(", "))
-                        .WithHeaders(allowedHeaders.IsNullOrEmpty()
-                            ? ["Content-Type", "Authorization"]
-                            : allowedHeaders!.Split(", "))
+                    var origins = allowedOrigins.IsNullOrEmpty()
+                        ? ["https://localhost:5173"]
+                        : allowedOrigins!.Split(", ");
+
+                    var methods = allowedMethods.IsNullOrEmpty()
+                        ? ["GET", "POST", "PUT", "DELETE"]
+                        : allowedMethods!.Split(", ");
+
+                    var headers = allowedHeaders.IsNullOrEmpty()
+                        ? ["Content-Type", "Authorization"]
+                        : allowedHeaders!.Split(", ");
+
+                    Console.WriteLine("Origins: " + string.Join(", ", origins));
+                    Console.WriteLine("Methods: " + string.Join(", ", methods));
+                    Console.WriteLine("Headers: " + string.Join(", ", headers));
+
+                    policy.WithOrigins(origins)
+                        .WithMethods(methods)
+                        .WithHeaders(headers)
                         .AllowCredentials();
                 });
 
