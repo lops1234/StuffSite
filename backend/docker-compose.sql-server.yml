@@ -38,5 +38,11 @@ services:
       sh -c "dotnet restore &&
              dotnet run"
 
+#    command: >
+#      sh -c "dotnet tool install --global dotnet-ef &&
+#             dotnet restore &&
+#             dotnet run &&
+#             tail -f /dev/null"
+
 volumes:
   sql-data:
