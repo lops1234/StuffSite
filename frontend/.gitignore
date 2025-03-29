@@ -27,3 +27,25 @@ dist-ssr
 .vite/
 dist/
 dist-ssr/
+
+# IDE specific files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
+*.iml
+*.iws
+*.ipr
+
+# JetBrains IDE files
+.idea/
+**/.idea/
+*.iml
+*.ipr
+*.iws
+.idea/.idea.*
+.idea/.idea.*/
+.idea/.idea.*/**/*
