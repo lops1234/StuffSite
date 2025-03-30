@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   react-app:
     build:
@@ -11,10 +9,9 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
-      - ./certs:/app/certs
     environment:
       - NODE_ENV=development
-      # Add your environment variables here
+      - DOCKER_ENVIRONMENT=true
       - VITE_PFX_PATH=${VITE_PFX_PATH}
       - VITE_PFX_PASSPHRASE=${VITE_PFX_PASSPHRASE}
       - VITE_API_URL=${VITE_API_URL}
