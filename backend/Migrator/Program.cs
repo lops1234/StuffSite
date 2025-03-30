@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Migrator;
 
-Console.WriteLine("Starting migrations...");
+Console.WriteLine("Starting Migrator");
 Environment.SetEnvironmentVariable("RUNNING_MIGRATIONS", "true");
 var host = CreateHostBuilder(args).Build();
 ApplyMigrations(host, args);
@@ -12,14 +12,14 @@ return;
 
 static void ApplyMigrations(IHost host, string[] args)
 {
-    Console.WriteLine("Starting migrations...");
+    Console.WriteLine("Find Migrations");
     using var scope = host.Services.CreateScope();
     var services = scope.ServiceProvider;
     var context = services.GetRequiredService<ApplicationDbContext>();
-
+    
     if (args.Length != 0)
     {
-        Console.WriteLine("Starting migrations...");
+        Console.WriteLine("Starting migration specific...");
         Console.WriteLine($"Migrating to version: {args[0]}");
         context.Database.Migrate(args[0]);
         Console.WriteLine("Migrations successfully.");
@@ -30,6 +30,7 @@ static void ApplyMigrations(IHost host, string[] args)
     if (pendingMigrations.Any())
     {
         Console.WriteLine("Starting migrations...");
+        Console.WriteLine("Pending migrations: {0}", pendingMigrations.Count);
 
         foreach (var migration in pendingMigrations)
         {

@@ -11,21 +11,23 @@ public class DbContextFactory : IDesignTimeDbContextFactory<ApplicationDbContext
     public ApplicationDbContext CreateDbContext(string[] args)
     {
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
+        var connectionString = GetConnectionString();
+        optionsBuilder.UseSqlServer(connectionString,
+            a => a.MigrationsAssembly(Assembly.GetExecutingAssembly().GetName().Name));
+
+        return new ApplicationDbContext(optionsBuilder.Options);
+    }
+
+    private string GetConnectionString()
+    {
         var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
         if (!string.IsNullOrEmpty(connectionString))
         {
-            optionsBuilder.UseSqlServer(connectionString);
-
-            return new ApplicationDbContext(optionsBuilder.Options);
+            return connectionString;
         }
 
         var configuration = BuildConfiguration();
-        
-        var assemblyName = Assembly.GetExecutingAssembly().GetName().Name;
-        optionsBuilder.UseSqlServer(configuration.GetConnectionString("DefaultConnection"),
-            a => a.MigrationsAssembly(assemblyName));
-
-        return new ApplicationDbContext(optionsBuilder.Options);
+        return configuration.GetConnectionString("DefaultConnection");
     }
 
     private static IConfigurationRoot BuildConfiguration()

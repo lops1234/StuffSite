@@ -20,7 +20,10 @@ export default defineConfig({
             pfx: fs.readFileSync(path.resolve(__dirname, pfxPath)),
             passphrase: passphrase
         },
+        port: 5173,
+        strictPort: true, // This prevents automatic port switching
     },
+
     define: {
         'process.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL),
     },
