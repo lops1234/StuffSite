@@ -12,6 +12,7 @@ import Register from "./components/Register";
 import Home from "./components/Home";
 import Profile from "./components/Profile";
 import Invaders from "./components/Invaders.tsx";
+import Snake from "./components/Snake";
 // import BoardUser from "./components/BoardUser";
 // import BoardModerator from "./components/BoardModerator";
 // import BoardAdmin from "./components/BoardAdmin";
@@ -148,6 +149,11 @@ const App: React.FC = () => {
                             Invaders
                         </Link>
                     </li>
+                    <li className="nav-item">
+                        <Link to={"/snake"} className="nav-link">
+                            Snake
+                        </Link>
+                    </li>
                 </div>
             </nav>
 
@@ -158,7 +164,8 @@ const App: React.FC = () => {
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     <Route path="/profile" element={<Profile />} />
-                    <Route path={"/invaders"} element={<Invaders />} />
+                    <Route path="/invaders" element={<Invaders />} />
+                    <Route path="/snake" element={<Snake />} />
                     {/*<Route path="/user" element={<BoardUser />} />*/}
                     {/*<Route path="/mod" element={<BoardModerator />} />*/}
                     {/*<Route path="/admin" element={<BoardAdmin />} />*/}

@@ -40,13 +40,11 @@ ConfigureExceptionPage();
 ConfigureHttps();
 ConfigureApiDocs();
 
-// Use CORS BEFORE routing and endpoints
 ConfigureCors();
 app.UseRouting();
 ConfigureAuthorization();
 
-// Enable serving static files 
-//This is for wwwroot signalr-test.html
+// Enable serving static files
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
