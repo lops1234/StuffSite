@@ -83,58 +83,82 @@ class SnakeGameService {
   constructor() {
     // Initialize the connection without starting it
     this.createConnection();
+    console.log('SnakeGameService constructor called');
   }
 
   private createConnection(): void {
     // API URL from environment variable
     const apiUrl = import.meta.env.VITE_API_URL || 'https://localhost:7039';
+    console.log('Using API URL:', apiUrl);
     
-    this.connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${apiUrl}/hubs/snake`)
-      .withAutomaticReconnect()
-      .configureLogging(signalR.LogLevel.Information)
-      .build();
+    try {
+      this.connection = new signalR.HubConnectionBuilder()
+        .withUrl(`${apiUrl}/hubs/snake`, {
+          skipNegotiation: true,
+          transport: signalR.HttpTransportType.WebSockets,
+          logMessageContent: true
+        })
+        .withAutomaticReconnect()
+        .configureLogging(signalR.LogLevel.Information)
+        .build();
 
-    // Set up event handlers
-    this.connection.on('GameStateUpdated', (gameState: SnakeGameState) => {
-      this.gameStateUpdatedCallbacks.forEach(callback => callback(gameState));
-    });
+      // Set up event handlers
+      this.connection.on('GameStateUpdated', (gameState: SnakeGameState) => {
+        console.log('GameStateUpdated event received');
+        this.gameStateUpdatedCallbacks.forEach(callback => callback(gameState));
+      });
 
-    this.connection.on('PlayerJoined', (gameState: SnakeGameState) => {
-      this.playerJoinedCallbacks.forEach(callback => callback(gameState));
-    });
+      this.connection.on('PlayerJoined', (gameState: SnakeGameState) => {
+        console.log('PlayerJoined event received');
+        this.playerJoinedCallbacks.forEach(callback => callback(gameState));
+      });
 
-    this.connection.on('PlayerLeft', (gameState: SnakeGameState, connectionId: string) => {
-      this.playerLeftCallbacks.forEach(callback => callback(gameState, connectionId));
-    });
+      this.connection.on('PlayerLeft', (gameState: SnakeGameState, connectionId: string) => {
+        console.log('PlayerLeft event received');
+        this.playerLeftCallbacks.forEach(callback => callback(gameState, connectionId));
+      });
 
-    this.connection.on('GameStarted', (gameState: SnakeGameState) => {
-      this.gameStartedCallbacks.forEach(callback => callback(gameState));
-    });
+      this.connection.on('GameStarted', (gameState: SnakeGameState) => {
+        console.log('GameStarted event received');
+        this.gameStartedCallbacks.forEach(callback => callback(gameState));
+      });
 
-    this.connection.on('GameEnded', (gameState: SnakeGameState) => {
-      this.gameEndedCallbacks.forEach(callback => callback(gameState));
-      this.currentGameId = '';
-    });
+      this.connection.on('GameEnded', (gameState: SnakeGameState) => {
+        console.log('GameEnded event received');
+        this.gameEndedCallbacks.forEach(callback => callback(gameState));
+        this.currentGameId = '';
+      });
 
-    this.connection.onclose(() => {
-      this._isConnected = false;
-      console.log('SignalR connection closed');
-    });
+      this.connection.onclose(() => {
+        this._isConnected = false;
+        console.log('SignalR connection closed');
+      });
+      
+      console.log('Connection object created successfully');
+    } catch (error) {
+      console.error('Error creating connection:', error);
+      throw error;
+    }
   }
 
   // Start the connection
   public async connect(): Promise<void> {
     try {
+      console.log('Attempting to connect to SignalR hub');
+      
       if (!this.connection) {
+        console.log('Connection not initialized, creating new connection');
         this.createConnection();
       }
 
       if (this.connection!.state === signalR.HubConnectionState.Disconnected) {
+        console.log('Connection is disconnected, starting connection...');
         this.connectionPromise = this.connection!.start();
         await this.connectionPromise;
         this._isConnected = true;
-        console.log('SignalR connection established');
+        console.log('SignalR connection established successfully');
+      } else {
+        console.log('Connection already in state:', this.connection!.state);
       }
     } catch (error) {
       this._isConnected = false;

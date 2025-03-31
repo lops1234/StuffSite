@@ -25,6 +25,12 @@ export default class MenuScene extends Phaser.Scene {
       this.playerName = savedName;
     }
 
+    // Try to create DOM input first
+    this.createNameInput();
+
+    // Add fallback Phaser text input
+    this.createFallbackNameInput();
+
     // Add background
     try {
       // Try to add the background image
@@ -59,9 +65,6 @@ export default class MenuScene extends Phaser.Scene {
       repeat: -1
     });
 
-    // Create the player name input
-    this.createNameInput();
-    
     // Create submit name button
     this.createSubmitNameButton();
 
@@ -81,7 +84,10 @@ export default class MenuScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerover', () => this.startButton.setStyle({ color: '#FFFF00' }))
       .on('pointerout', () => this.startButton.setStyle({ color: '#FFFFFF' }))
-      .on('pointerdown', () => this.hostGame());
+      .on('pointerdown', () => {
+        console.log('Host New Game button clicked');
+        this.hostGame();
+      });
 
     // Create the join button
     this.joinButton = this.add.text(
@@ -91,7 +97,7 @@ export default class MenuScene extends Phaser.Scene {
       {
         fontSize: '24px',
         color: '#FFFFFF',
-        backgroundColor: '#000099',
+        backgroundColor: '#0000aa',
         padding: { left: 15, right: 15, top: 10, bottom: 10 }
       }
     )
@@ -99,21 +105,20 @@ export default class MenuScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerover', () => this.joinButton.setStyle({ color: '#FFFF00' }))
       .on('pointerout', () => this.joinButton.setStyle({ color: '#FFFFFF' }))
-      .on('pointerdown', () => this.showJoinGameUI());
+      .on('pointerdown', () => {
+        console.log('Join Game button clicked');
+        this.showJoinGameUI();
+      });
 
-    // Hide game ID input initially
-    this.createGameIdInput();
-    this.gameIdInput.style.display = 'none';
-
-    // Create back button (hidden initially)
+    // Create the back button (initially hidden)
     this.backButton = this.add.text(
       this.scale.width / 2,
       this.scale.height / 2 + 140,
       'Back',
       {
-        fontSize: '20px',
+        fontSize: '24px',
         color: '#FFFFFF',
-        backgroundColor: '#990000',
+        backgroundColor: '#aa0000',
         padding: { left: 15, right: 15, top: 10, bottom: 10 }
       }
     )
@@ -123,6 +128,12 @@ export default class MenuScene extends Phaser.Scene {
       .on('pointerout', () => this.backButton.setStyle({ color: '#FFFFFF' }))
       .on('pointerdown', () => this.showMainMenu())
       .setVisible(false);
+
+    // Create the game ID input (initially hidden)
+    this.createGameIdInput();
+    if (this.gameIdInput) {
+      this.gameIdInput.style.display = 'none';
+    }
 
     // Add a decorative element - animated fly
     const fly = this.add.sprite(
@@ -144,6 +155,11 @@ export default class MenuScene extends Phaser.Scene {
   }
 
   private createNameInput() {
+    // Remove any existing input element
+    if (this.nameInput) {
+      document.body.removeChild(this.nameInput);
+    }
+
     // Create a DOM element for name input
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
@@ -160,7 +176,16 @@ export default class MenuScene extends Phaser.Scene {
     nameInput.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
     nameInput.style.color = '#ffffff';
     nameInput.style.fontSize = '16px';
+    nameInput.style.zIndex = '1000';
     nameInput.value = this.playerName;
+
+    // Position based on game container
+    const gameContainer = document.getElementById('snake-game-canvas');
+    if (gameContainer) {
+      const rect = gameContainer.getBoundingClientRect();
+      nameInput.style.top = `${rect.top + (rect.height * 0.4)}px`;
+      nameInput.style.left = `${rect.left + (rect.width * 0.5)}px`;
+    }
     
     // Add event listener for Enter key press
     nameInput.addEventListener('keydown', (event) => {
@@ -180,11 +205,63 @@ export default class MenuScene extends Phaser.Scene {
     document.body.appendChild(nameInput);
     this.nameInput = nameInput;
 
+    // Make sure it's visible
+    nameInput.style.display = 'block';
+
     // Store input value when it changes
     nameInput.oninput = () => {
       this.playerName = nameInput.value;
       localStorage.setItem('snakePlayerName', this.playerName);
     };
+    
+    // Log that input was created
+    console.log('Name input created and added to DOM');
+  }
+
+  private createFallbackNameInput() {
+    // Create a text prompt for name
+    const namePrompt = this.add.text(
+      this.scale.width / 2,
+      this.scale.height * 0.35,
+      'Enter your name:',
+      {
+        fontSize: '18px',
+        color: '#FFFFFF'
+      }
+    ).setOrigin(0.5);
+
+    // Create a placeholder for name input
+    const nameBox = this.add.rectangle(
+      this.scale.width / 2,
+      this.scale.height * 0.4,
+      220,
+      40,
+      0x000000,
+      0.5
+    ).setOrigin(0.5).setStrokeStyle(2, 0x00ff00);
+    
+    // Text to show current name
+    const nameText = this.add.text(
+      this.scale.width / 2,
+      this.scale.height * 0.4,
+      this.playerName || 'Click to edit',
+      {
+        fontSize: '18px',
+        color: '#FFFFFF'
+      }
+    ).setOrigin(0.5);
+    
+    // Make rectangle interactive
+    nameBox.setInteractive({ useHandCursor: true });
+    nameBox.on('pointerdown', () => {
+      // Display a prompt to get the player's name
+      const name = prompt('Enter your name:', this.playerName);
+      if (name) {
+        this.playerName = name;
+        nameText.setText(name);
+        localStorage.setItem('snakePlayerName', name);
+      }
+    });
   }
 
   private createSubmitNameButton() {
@@ -256,6 +333,8 @@ export default class MenuScene extends Phaser.Scene {
   }
 
   private hostGame() {
+    console.log('Attempting to host game with player name:', this.playerName);
+    
     if (!this.playerName) {
       this.showError('Please enter your name first!');
       return;
@@ -271,9 +350,21 @@ export default class MenuScene extends Phaser.Scene {
         this.nameInput.blur();
       }
 
+      // Show a connecting status message
+      const statusText = this.add.text(
+        this.scale.width / 2, 
+        this.scale.height * 0.7,
+        'Connecting to server...',
+        {
+          fontSize: '18px',
+          color: '#ffff00'
+        }
+      ).setOrigin(0.5);
+      
       // Connect to the SignalR hub
       snakeGameService.connect()
         .then(() => {
+          statusText.setText('Creating new game...');
           // Create a new game
           return snakeGameService.createGame({
             playerName: this.playerName,
@@ -288,25 +379,47 @@ export default class MenuScene extends Phaser.Scene {
           });
         })
         .then(gameState => {
+          statusText.setText('Game created! Joining lobby...');
           // Store the game ID and pass to lobby
           this.gameId = gameState.gameId;
           
-          // Clean up DOM elements
-          this.cleanup();
+          // Display the game ID on screen
+          this.add.text(
+            this.scale.width / 2,
+            this.scale.height * 0.75,
+            `Game ID: ${this.gameId}`,
+            {
+              fontSize: '16px',
+              color: '#ffffff'
+            }
+          ).setOrigin(0.5);
           
-          // Start the lobby scene
-          this.scene.start('LobbyScene', {
-            gameId: this.gameId,
-            playerName: this.playerName,
-            isHost: true
+          // Delay for a moment to show the game ID
+          this.time.delayedCall(1500, () => {
+            // Clean up DOM elements
+            this.cleanup();
+            statusText.destroy();
+            
+            // Start the lobby scene
+            this.scene.start('LobbyScene', {
+              gameId: this.gameId,
+              playerName: this.playerName,
+              isHost: true
+            });
           });
         })
         .catch(error => {
           console.error('Error hosting game:', error);
+          statusText.setText('Connection failed. Try again.');
           this.showError('Failed to create game. Try again!');
           this.startButton.setText('Host New Game');
           this.startButton.setInteractive({ useHandCursor: true });
           this.joinButton.setInteractive({ useHandCursor: true });
+          
+          // Remove status text after a delay
+          this.time.delayedCall(3000, () => {
+            statusText.destroy();
+          });
         });
     } catch (error) {
       console.error('Error in hostGame:', error);

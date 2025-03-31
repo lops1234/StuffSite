@@ -30,6 +30,16 @@ const SnakeGame: React.FC = () => {
       input {
         z-index: 1000 !important;
         font-family: Arial, sans-serif;
+        display: block !important; 
+        visibility: visible !important;
+        opacity: 1 !important;
+      }
+      #snake-game-canvas {
+        position: relative;
+        z-index: 1;
+      }
+      #snake-game-canvas canvas {
+        z-index: 10;
       }
     `;
     
@@ -94,6 +104,15 @@ const SnakeGame: React.FC = () => {
       try {
         if (gameRef.current) {
           console.log('Destroying Phaser game instance');
+          
+          // Remove any input fields that might be left
+          const inputs = document.querySelectorAll('input');
+          inputs.forEach(input => {
+            if (input.parentNode) {
+              input.parentNode.removeChild(input);
+            }
+          });
+          
           gameRef.current.destroy(true);
           gameRef.current = null;
           gameInitializedRef.current = false;
