@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SignalR Test Client</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        h1 { color: #333; }
+        #messagesList { border: 1px solid #ddd; padding: 10px; height: 300px; overflow-y: auto; margin-bottom: 20px; }
+        .message { margin-bottom: 5px; }
+        .input-group { margin-bottom: 10px; }
+        label { display: inline-block; width: 100px; }
+        input, button { padding: 5px; }
+        button { cursor: pointer; margin-right: 5px; }
+        .status { font-weight: bold; }
+        .connected { color: green; }
+        .disconnected { color: red; }
+    </style>
+</head>
+<body>
+    <h1>SignalR Snake Game Test Client</h1>
+    
+    <div>
+        <p>Connection Status: <span id="connectionStatus" class="status disconnected">Disconnected</span></p>
+    </div>
+
+    <div class="input-group">
+        <label for="playerName">Player Name:</label>
+        <input type="text" id="playerName" value="TestPlayer" />
+    </div>
+
+    <div>
+        <button id="connectButton">Connect</button>
+        <button id="disconnectButton" disabled>Disconnect</button>
+    </div>
+
+    <h3>Game Actions</h3>
+    <div>
+        <button id="createGameButton" disabled>Create Game</button>
+        <button id="getGamesButton" disabled>Get Available Games</button>
+    </div>
+
+    <div class="input-group">
+        <label for="gameId">Game ID:</label>
+        <input type="text" id="gameId" />
+        <button id="joinGameButton" disabled>Join Game</button>
+        <button id="startGameButton" disabled>Start Game</button>
+    </div>
+
+    <div class="input-group">
+        <label>Direction:</label>
+        <button id="upButton" disabled>Up</button>
+        <button id="downButton" disabled>Down</button>
+        <button id="leftButton" disabled>Left</button>
+        <button id="rightButton" disabled>Right</button>
+    </div>
+
+    <h3>Messages</h3>
+    <div id="messagesList"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.min.js"></script>
+    <script>
+        // Elements
+        const connectButton = document.getElementById('connectButton');
+        const disconnectButton = document.getElementById('disconnectButton');
+        const createGameButton = document.getElementById('createGameButton');
+        const getGamesButton = document.getElementById('getGamesButton');
+        const joinGameButton = document.getElementById('joinGameButton');
+        const startGameButton = document.getElementById('startGameButton');
+        const upButton = document.getElementById('upButton');
+        const downButton = document.getElementById('downButton');
+        const leftButton = document.getElementById('leftButton');
+        const rightButton = document.getElementById('rightButton');
+        const playerNameInput = document.getElementById('playerName');
+        const gameIdInput = document.getElementById('gameId');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const messagesList = document.getElementById('messagesList');
+
+        // Current game ID
+        let currentGameId = '';
+
+        // SignalR connection
+        let connection;
+
+        // Add message to the list
+        function addMessage(message) {
+            const li = document.createElement('div');
+            li.className = 'message';
+            li.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            messagesList.appendChild(li);
+            messagesList.scrollTop = messagesList.scrollHeight;
+        }
+
+        // Update buttons state
+        function updateButtonsState(connected) {
+            connectButton.disabled = connected;
+            disconnectButton.disabled = !connected;
+            createGameButton.disabled = !connected;
+            getGamesButton.disabled = !connected;
+            joinGameButton.disabled = !connected || !gameIdInput.value;
+            startGameButton.disabled = !connected || !currentGameId;
+            upButton.disabled = !connected || !currentGameId;
+            downButton.disabled = !connected || !currentGameId;
+            leftButton.disabled = !connected || !currentGameId;
+            rightButton.disabled = !connected || !currentGameId;
+        }
+
+        // Connect to SignalR hub
+        connectButton.addEventListener('click', async () => {
+            try {
+                // Create the connection
+                connection = new signalR.HubConnectionBuilder()
+                    .withUrl('https://localhost:7039/hubs/snake')
+                    .withAutomaticReconnect()
+                    .configureLogging(signalR.LogLevel.Information)
+                    .build();
+
+                // Subscribe to events
+                connection.on('PlayerJoined', (game) => {
+                    addMessage(`Player joined: ${JSON.stringify(game)}`);
+                });
+
+                connection.on('GameStarted', (game) => {
+                    addMessage(`Game started: ${JSON.stringify(game)}`);
+                });
+
+                connection.on('GameStateUpdated', (game) => {
+                    addMessage(`Game state updated: players=${Object.keys(game.players).length}, flies=${game.flies.length}`);
+                });
+
+                connection.on('GameEnded', (game) => {
+                    addMessage(`Game ended: ${JSON.stringify(game)}`);
+                    currentGameId = '';
+                    updateButtonsState(true);
+                });
+
+                connection.on('PlayerLeft', (game, connectionId) => {
+                    addMessage(`Player left: ${connectionId}`);
+                });
+
+                // Start the connection
+                await connection.start();
+                connectionStatus.textContent = 'Connected';
+                connectionStatus.className = 'status connected';
+                addMessage('Connected to SignalR hub');
+                updateButtonsState(true);
+            } catch (err) {
+                addMessage(`Connection error: ${err}`);
+                connectionStatus.textContent = 'Error';
+                connectionStatus.className = 'status disconnected';
+                console.error(err);
+            }
+        });
+
+        // Disconnect from SignalR hub
+        disconnectButton.addEventListener('click', async () => {
+            if (connection) {
+                try {
+                    await connection.stop();
+                    connectionStatus.textContent = 'Disconnected';
+                    connectionStatus.className = 'status disconnected';
+                    addMessage('Disconnected from SignalR hub');
+                    currentGameId = '';
+                    updateButtonsState(false);
+                } catch (err) {
+                    addMessage(`Disconnect error: ${err}`);
+                    console.error(err);
+                }
+            }
+        });
+
+        // Create game
+        createGameButton.addEventListener('click', async () => {
+            if (connection) {
+                try {
+                    const playerName = playerNameInput.value || 'TestPlayer';
+                    const result = await connection.invoke('CreateGame', { 
+                        playerName,
+                        settings: {
+                            boardWidth: 25,
+                            boardHeight: 25,
+                            initialSnakeLength: 3,
+                            maxPlayers: 4,
+                            gameDuration: 180,
+                            flyCount: 5
+                        }
+                    });
+                    currentGameId = result.gameId;
+                    gameIdInput.value = currentGameId;
+                    addMessage(`Game created: ${currentGameId}`);
+                    updateButtonsState(true);
+                } catch (err) {
+                    addMessage(`Create game error: ${err}`);
+                    console.error(err);
+                }
+            }
+        });
+
+        // Get available games
+        getGamesButton.addEventListener('click', async () => {
+            if (connection) {
+                try {
+                    const games = await connection.invoke('GetAvailableGames');
+                    addMessage(`Available games: ${JSON.stringify(games)}`);
+                } catch (err) {
+                    addMessage(`Get games error: ${err}`);
+                    console.error(err);
+                }
+            }
+        });
+
+        // Join game
+        joinGameButton.addEventListener('click', async () => {
+            if (connection) {
+                try {
+                    const gameId = gameIdInput.value;
+                    if (!gameId) {
+                        addMessage('Please enter a game ID');
+                        return;
+                    }
+                    
+                    const playerName = playerNameInput.value || 'TestPlayer';
+                    const result = await connection.invoke('JoinGame', { 
+                        gameId,
+                        playerName
+                    });
+                    
+                    if (result) {
+                        currentGameId = gameId;
+                        addMessage(`Joined game: ${gameId}`);
+                        updateButtonsState(true);
+                    } else {
+                        addMessage(`Failed to join game: ${gameId}`);
+                    }
+                } catch (err) {
+                    addMessage(`Join game error: ${err}`);
+                    console.error(err);
+                }
+            }
+        });
+
+        // Start game
+        startGameButton.addEventListener('click', async () => {
+            if (connection && currentGameId) {
+                try {
+                    const result = await connection.invoke('StartGame', currentGameId);
+                    if (result) {
+                        addMessage(`Started game: ${currentGameId}`);
+                    } else {
+                        addMessage(`Failed to start game: ${currentGameId}`);
+                    }
+                } catch (err) {
+                    addMessage(`Start game error: ${err}`);
+                    console.error(err);
+                }
+            }
+        });
+
+        // Direction buttons
+        upButton.addEventListener('click', () => {
+            sendDirection('up');
+        });
+
+        downButton.addEventListener('click', () => {
+            sendDirection('down');
+        });
+
+        leftButton.addEventListener('click', () => {
+            sendDirection('left');
+        });
+
+        rightButton.addEventListener('click', () => {
+            sendDirection('right');
+        });
+
+        // Send direction update
+        async function sendDirection(direction) {
+            if (connection && currentGameId) {
+                try {
+                    await connection.invoke('UpdateDirection', { direction }, currentGameId);
+                    addMessage(`Sent direction: ${direction}`);
+                } catch (err) {
+                    addMessage(`Send direction error: ${err}`);
+                    console.error(err);
+                }
+            }
+        }
+
+        // Update game ID input
+        gameIdInput.addEventListener('input', () => {
+            joinGameButton.disabled = !connection || !gameIdInput.value;
+        });
+
+        // Initial button state
+        updateButtonsState(false);
+    </script>
+</body>
+</html> 

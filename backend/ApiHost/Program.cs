@@ -1,4 +1,6 @@
 using ApiHost;
+using ApiHost.Hubs;
+using ApiHost.Hubs.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Scalar.AspNetCore;
@@ -12,6 +14,25 @@ DatabaseConfiguration.ConfigureDatabase(builder);
 AuthorizationConfiguration.ConfigureAuthorization(builder);
 CorsConfiguration.ConfigureCors(builder);
 
+// Register SignalR services and configure for better performance
+builder.Services.AddSignalR(options => 
+{
+    // Configure SignalR options for better performance
+    options.MaximumReceiveMessageSize = 102400; // 100 KB
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+})
+.AddJsonProtocol(options => 
+{
+    // Ignore null values in JSON to reduce payload size
+    options.PayloadSerializerOptions.DefaultIgnoreCondition = 
+        System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+});
+
+// Register game services
+builder.Services.AddSingleton<ISnakeGameService, SnakeGameService>();
+
 builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, CustomAuthorizationFailureHandler>();
 
 var app = builder.Build();
@@ -19,9 +40,21 @@ ConfigureExceptionPage();
 ConfigureHttps();
 ConfigureApiDocs();
 
+// Use CORS BEFORE routing and endpoints
 ConfigureCors();
+app.UseRouting();
 ConfigureAuthorization();
 
+// Enable serving static files 
+//This is for wwwroot signalr-test.html
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
+// Add a simple endpoint to test if the API is running
+app.MapGet("/api/ping", () => "Pong! Server is running");
+
+// Map SignalR hub
+app.MapHub<SnakeGameHub>("/hubs/snake");
 
 var summaries = new[]
 {
@@ -89,8 +122,6 @@ void ConfigureAuthorization()
     // app.UseAuthorization();
     // app.MapScalarApiReference().RequireAuthorization();
 }
-
-
 
 record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {

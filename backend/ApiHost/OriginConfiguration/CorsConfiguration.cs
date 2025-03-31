@@ -34,11 +34,11 @@ public static class CorsConfiguration
                         : allowedOrigins!.Split(", ");
 
                     var methods = allowedMethods.IsNullOrEmpty()
-                        ? ["GET", "POST", "PUT", "DELETE"]
+                        ? ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
                         : allowedMethods!.Split(", ");
 
                     var headers = allowedHeaders.IsNullOrEmpty()
-                        ? ["Content-Type", "Authorization"]
+                        ? ["Content-Type", "Authorization", "X-Requested-With", "Accept", "X-SignalR-User-Agent"]
                         : allowedHeaders!.Split(", ");
 
                     Console.WriteLine("Origins: " + string.Join(", ", origins));
@@ -48,7 +48,9 @@ public static class CorsConfiguration
                     policy.WithOrigins(origins)
                         .WithMethods(methods)
                         .WithHeaders(headers)
-                        .AllowCredentials();
+                        .AllowCredentials()
+                        .SetPreflightMaxAge(TimeSpan.FromMinutes(10))
+                        .SetIsOriginAllowedToAllowWildcardSubdomains();
                 });
 
             options.AddPolicy(name: CorsAllowAll,
