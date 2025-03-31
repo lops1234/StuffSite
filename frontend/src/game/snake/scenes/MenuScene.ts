@@ -292,6 +292,11 @@ export default class MenuScene extends Phaser.Scene {
   }
 
   private createGameIdInput() {
+    // Remove any existing input element
+    if (this.gameIdInput && document.body.contains(this.gameIdInput)) {
+      document.body.removeChild(this.gameIdInput);
+    }
+
     // Create a DOM element for game ID input
     const gameIdInput = document.createElement('input');
     gameIdInput.type = 'text';
@@ -308,12 +313,14 @@ export default class MenuScene extends Phaser.Scene {
     gameIdInput.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
     gameIdInput.style.color = '#ffffff';
     gameIdInput.style.fontSize = '16px';
+    gameIdInput.style.zIndex = '2000';
     
     // Add event listener for Enter key press
     gameIdInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') {
         this.gameId = gameIdInput.value;
         gameIdInput.blur(); // Remove focus from input to allow button interaction
+        this.showConfirmation('Game ID submitted!');
       }
     });
 
@@ -326,10 +333,16 @@ export default class MenuScene extends Phaser.Scene {
     document.body.appendChild(gameIdInput);
     this.gameIdInput = gameIdInput;
 
+    // Initially hide the input
+    gameIdInput.style.display = 'none';
+
     // Store input value when it changes
     gameIdInput.oninput = () => {
       this.gameId = gameIdInput.value;
     };
+    
+    // Log that input was created
+    console.log('Game ID input created and added to DOM');
   }
 
   private hostGame() {
@@ -439,8 +452,31 @@ export default class MenuScene extends Phaser.Scene {
     // Switch to join game mode
     this.isJoining = true;
     
-    // Show game ID input
-    this.gameIdInput.style.display = 'block';
+    // Recreate and position game ID input field if needed
+    if (!this.gameIdInput || !document.body.contains(this.gameIdInput)) {
+      this.createGameIdInput();
+    }
+
+    // Position based on game container
+    const gameContainer = document.getElementById('snake-game-canvas');
+    if (gameContainer && this.gameIdInput) {
+      const rect = gameContainer.getBoundingClientRect();
+      this.gameIdInput.style.top = `${rect.top + (rect.height * 0.5)}px`;
+      this.gameIdInput.style.left = `${rect.left + (rect.width * 0.5)}px`;
+      
+      // Make sure it's visible with high z-index
+      this.gameIdInput.style.display = 'block';
+      this.gameIdInput.style.zIndex = '2000';
+      this.gameIdInput.style.opacity = '1';
+      this.gameIdInput.style.visibility = 'visible';
+      
+      // Set focus on the input
+      setTimeout(() => {
+        if (this.gameIdInput) {
+          this.gameIdInput.focus();
+        }
+      }, 100);
+    }
     
     // Create game ID submit button if it doesn't exist
     this.createGameIdSubmitButton();
@@ -448,6 +484,7 @@ export default class MenuScene extends Phaser.Scene {
     // Update button text and position
     this.startButton.setText('Join');
     this.startButton.setPosition(this.scale.width / 2, this.scale.height / 2 + 70);
+    this.startButton.removeAllListeners();
     this.startButton.setInteractive().on('pointerdown', () => this.joinGame());
     
     // Hide join button
@@ -455,6 +492,9 @@ export default class MenuScene extends Phaser.Scene {
     
     // Show back button
     this.backButton.setVisible(true);
+    
+    // Create fallback visual input for game ID
+    this.createFallbackGameIdInput();
   }
 
   private showMainMenu() {
@@ -584,13 +624,26 @@ export default class MenuScene extends Phaser.Scene {
   }
 
   private cleanup() {
+    console.log('Cleaning up DOM elements');
+    
     // Remove DOM elements
-    if (this.nameInput) {
-      document.body.removeChild(this.nameInput);
+    if (this.nameInput && document.body.contains(this.nameInput)) {
+      try {
+        document.body.removeChild(this.nameInput);
+        console.log('Name input removed');
+      } catch (error) {
+        console.error('Error removing name input:', error);
+      }
       this.nameInput = null as any;
     }
-    if (this.gameIdInput) {
-      document.body.removeChild(this.gameIdInput);
+    
+    if (this.gameIdInput && document.body.contains(this.gameIdInput)) {
+      try {
+        document.body.removeChild(this.gameIdInput);
+        console.log('Game ID input removed');
+      } catch (error) {
+        console.error('Error removing game ID input:', error);
+      }
       this.gameIdInput = null as any;
     }
   }
@@ -624,6 +677,51 @@ export default class MenuScene extends Phaser.Scene {
           this.showConfirmation('Game ID submitted!');
         }
       });
+  }
+
+  private createFallbackGameIdInput() {
+    // Create a text prompt for game ID
+    const gameIdPrompt = this.add.text(
+      this.scale.width / 2,
+      this.scale.height * 0.6,
+      'Enter Game ID:',
+      {
+        fontSize: '18px',
+        color: '#FFFFFF'
+      }
+    ).setOrigin(0.5);
+
+    // Create a placeholder for game ID input
+    const gameIdBox = this.add.rectangle(
+      this.scale.width / 2,
+      this.scale.height * 0.65,
+      220,
+      40,
+      0x000000,
+      0.5
+    ).setOrigin(0.5).setStrokeStyle(2, 0x00ff00);
+    
+    // Text to show current game ID
+    const gameIdText = this.add.text(
+      this.scale.width / 2,
+      this.scale.height * 0.65,
+      this.gameId || 'Click to edit',
+      {
+        fontSize: '18px',
+        color: '#FFFFFF'
+      }
+    ).setOrigin(0.5);
+    
+    // Make rectangle interactive
+    gameIdBox.setInteractive({ useHandCursor: true });
+    gameIdBox.on('pointerdown', () => {
+      // Display a prompt to get the player's game ID
+      const gameId = prompt('Enter Game ID:', this.gameId);
+      if (gameId) {
+        this.gameId = gameId;
+        gameIdText.setText(gameId);
+      }
+    });
   }
 
   shutdown() {

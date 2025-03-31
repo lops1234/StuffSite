@@ -92,15 +92,40 @@ class SnakeGameService {
     console.log('Using API URL:', apiUrl);
     
     try {
+      // Create connection with improved configuration
       this.connection = new signalR.HubConnectionBuilder()
         .withUrl(`${apiUrl}/hubs/snake`, {
           skipNegotiation: true,
-          transport: signalR.HttpTransportType.WebSockets,
-          logMessageContent: true
+          transport: signalR.HttpTransportType.WebSockets
         })
-        .withAutomaticReconnect()
+        .withAutomaticReconnect([0, 1000, 5000, 10000]) // Retry with increasing delays
         .configureLogging(signalR.LogLevel.Information)
         .build();
+
+      // Set up reconnection events
+      this.connection.onreconnecting((error) => {
+        console.log('SignalR reconnecting...', error);
+        this._isConnected = false;
+      });
+
+      this.connection.onreconnected((connectionId) => {
+        console.log('SignalR reconnected with ID:', connectionId);
+        this._isConnected = true;
+        
+        // If we have a current game, try to get its state
+        if (this.currentGameId) {
+          this.getGame(this.currentGameId)
+            .then(gameState => {
+              if (gameState) {
+                // Notify listeners of game state update after reconnection
+                this.gameStateUpdatedCallbacks.forEach(callback => callback(gameState));
+              }
+            })
+            .catch(error => {
+              console.error('Error fetching game state after reconnection:', error);
+            });
+        }
+      });
 
       // Set up event handlers
       this.connection.on('GameStateUpdated', (gameState: SnakeGameState) => {
@@ -129,9 +154,14 @@ class SnakeGameService {
         this.currentGameId = '';
       });
 
-      this.connection.onclose(() => {
+      this.connection.onclose((error) => {
         this._isConnected = false;
-        console.log('SignalR connection closed');
+        console.log('SignalR connection closed', error);
+        
+        // Notify listeners about connection error
+        if (error) {
+          this.connectionErrorCallbacks.forEach(callback => callback(error));
+        }
       });
       
       console.log('Connection object created successfully');
@@ -226,7 +256,25 @@ class SnakeGameService {
   public async updateDirection(direction: string, gameId: string): Promise<void> {
     try {
       await this.ensureConnected();
+      console.log(`Sending direction update: ${direction} for game ${gameId}`);
+      
+      // Send direction update to server
       await this.connection!.invoke('UpdateDirection', { direction }, gameId);
+      
+      // Since the server might not send an immediate update, let's also update our local game state
+      // for better responsiveness if we have the game state cached
+      if (this.currentGameId === gameId) {
+        // Manually trigger a game state fetch to ensure we have the latest state
+        this.getGame(gameId)
+          .then(gameState => {
+            if (gameState) {
+              console.log('Got updated game state after direction change');
+            }
+          })
+          .catch(err => {
+            console.error('Failed to get updated game state after direction change', err);
+          });
+      }
     } catch (error) {
       console.error('Error updating direction:', error);
       throw error;
@@ -260,45 +308,44 @@ class SnakeGameService {
     this.gameStateUpdatedCallbacks.push(callback);
   }
 
-  public onPlayerJoined(callback: PlayerJoinedCallback): void {
-    this.playerJoinedCallbacks.push(callback);
-  }
-
-  public onPlayerLeft(callback: PlayerLeftCallback): void {
-    this.playerLeftCallbacks.push(callback);
-  }
-
-  public onGameStarted(callback: GameStartedCallback): void {
-    this.gameStartedCallbacks.push(callback);
-  }
-
-  public onGameEnded(callback: GameEndedCallback): void {
-    this.gameEndedCallbacks.push(callback);
-  }
-
-  public onConnectionError(callback: ConnectionErrorCallback): void {
-    this.connectionErrorCallbacks.push(callback);
-  }
-
-  // Remove event subscriptions
   public offGameStateUpdated(callback: GameStateUpdatedCallback): void {
     this.gameStateUpdatedCallbacks = this.gameStateUpdatedCallbacks.filter(cb => cb !== callback);
+  }
+
+  public onPlayerJoined(callback: PlayerJoinedCallback): void {
+    this.playerJoinedCallbacks.push(callback);
   }
 
   public offPlayerJoined(callback: PlayerJoinedCallback): void {
     this.playerJoinedCallbacks = this.playerJoinedCallbacks.filter(cb => cb !== callback);
   }
 
+  public onPlayerLeft(callback: PlayerLeftCallback): void {
+    this.playerLeftCallbacks.push(callback);
+  }
+
   public offPlayerLeft(callback: PlayerLeftCallback): void {
     this.playerLeftCallbacks = this.playerLeftCallbacks.filter(cb => cb !== callback);
+  }
+
+  public onGameStarted(callback: GameStartedCallback): void {
+    this.gameStartedCallbacks.push(callback);
   }
 
   public offGameStarted(callback: GameStartedCallback): void {
     this.gameStartedCallbacks = this.gameStartedCallbacks.filter(cb => cb !== callback);
   }
 
+  public onGameEnded(callback: GameEndedCallback): void {
+    this.gameEndedCallbacks.push(callback);
+  }
+
   public offGameEnded(callback: GameEndedCallback): void {
     this.gameEndedCallbacks = this.gameEndedCallbacks.filter(cb => cb !== callback);
+  }
+
+  public onConnectionError(callback: ConnectionErrorCallback): void {
+    this.connectionErrorCallbacks.push(callback);
   }
 
   public offConnectionError(callback: ConnectionErrorCallback): void {

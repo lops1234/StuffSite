@@ -23,16 +23,34 @@ const SnakeGame: React.FC = () => {
 
     gameInitializedRef.current = true;
 
+    // Add styled container for DOM inputs to ensure they appear above the canvas
+    const inputContainer = document.createElement('div');
+    inputContainer.id = 'snake-game-inputs';
+    inputContainer.style.position = 'absolute';
+    inputContainer.style.top = '0';
+    inputContainer.style.left = '0';
+    inputContainer.style.width = '100%';
+    inputContainer.style.height = '100%';
+    inputContainer.style.pointerEvents = 'none';
+    inputContainer.style.zIndex = '1000';
+    
+    // Add it to the DOM
+    const gameContainer = document.getElementById('snake-game-canvas');
+    if (gameContainer) {
+      gameContainer.appendChild(inputContainer);
+    }
+
     // Add input styling once
     const style = document.createElement('style');
     style.id = 'snake-game-input-style';
     style.innerHTML = `
       input {
-        z-index: 1000 !important;
+        z-index: 2000 !important;
         font-family: Arial, sans-serif;
         display: block !important; 
         visibility: visible !important;
         opacity: 1 !important;
+        pointer-events: auto !important;
       }
       #snake-game-canvas {
         position: relative;
@@ -40,6 +58,9 @@ const SnakeGame: React.FC = () => {
       }
       #snake-game-canvas canvas {
         z-index: 10;
+      }
+      #snake-game-inputs {
+        z-index: 1000;
       }
     `;
     
@@ -112,6 +133,12 @@ const SnakeGame: React.FC = () => {
               input.parentNode.removeChild(input);
             }
           });
+          
+          // Remove input container
+          const inputContainer = document.getElementById('snake-game-inputs');
+          if (inputContainer && inputContainer.parentNode) {
+            inputContainer.parentNode.removeChild(inputContainer);
+          }
           
           gameRef.current.destroy(true);
           gameRef.current = null;

@@ -180,24 +180,71 @@ export default class LobbyScene extends Phaser.Scene {
   }
 
   private registerEventHandlers() {
-    // Store bound methods to allow for proper cleanup
+    // Bind event handlers
     this.onPlayerJoinedBound = this.onPlayerJoined.bind(this);
     this.onPlayerLeftBound = this.onPlayerLeft.bind(this);
-
-    // Register event handlers with the game service
+    
+    const onGameStartedBound = this.onGameStarted.bind(this);
+    const onConnectionErrorBound = this.onConnectionError.bind(this);
+    
+    // Register event handlers
     snakeGameService.onPlayerJoined(this.onPlayerJoinedBound);
     snakeGameService.onPlayerLeft(this.onPlayerLeftBound);
-    snakeGameService.onGameStarted(() => this.onGameStarted());
+    snakeGameService.onGameStarted(onGameStartedBound);
+    snakeGameService.onConnectionError(onConnectionErrorBound);
+    
+    console.log('LobbyScene: Registered event handlers');
+    
+    // Clean up when scene is shut down
+    this.events.once('shutdown', () => {
+      // Remove event handlers
+      snakeGameService.offPlayerJoined(this.onPlayerJoinedBound);
+      snakeGameService.offPlayerLeft(this.onPlayerLeftBound);
+      snakeGameService.offGameStarted(onGameStartedBound);
+      snakeGameService.offConnectionError(onConnectionErrorBound);
+      console.log('LobbyScene: Unregistered event handlers');
+    });
+  }
+
+  private onConnectionError(error: Error) {
+    console.error('Connection error in lobby:', error);
+    this.showError('Lost connection to server. Please try again.');
+    
+    // Return to menu after a delay
+    this.time.delayedCall(3000, () => {
+      this.scene.start('MenuScene');
+    });
   }
 
   private async fetchCurrentGameState() {
     try {
+      console.log('LobbyScene: Fetching current game state');
       const gameState = await snakeGameService.getGame(this.gameId);
+      
       if (gameState) {
+        console.log('LobbyScene: Received game state', gameState);
         this.updatePlayerList(gameState);
+        
+        // If game is already active, go to game scene
+        if (gameState.isActive) {
+          console.log('LobbyScene: Game is already active, transitioning to GameScene');
+          this.scene.start('GameScene', {
+            gameId: this.gameId,
+            playerName: this.playerName
+          });
+        }
+      } else {
+        console.error('LobbyScene: Game not found');
+        this.showError('Game not found. Returning to menu...');
+        
+        // Return to menu after a delay
+        this.time.delayedCall(3000, () => {
+          this.scene.start('MenuScene');
+        });
       }
     } catch (error) {
       console.error('Error fetching game state:', error);
+      this.showError('Error connecting to game');
     }
   }
 
@@ -312,15 +359,5 @@ export default class LobbyScene extends Phaser.Scene {
     this.time.delayedCall(3000, () => {
       errorText.destroy();
     });
-  }
-
-  shutdown() {
-    // Remove event handlers
-    if (this.onPlayerJoinedBound) {
-      snakeGameService.offPlayerJoined(this.onPlayerJoinedBound);
-    }
-    if (this.onPlayerLeftBound) {
-      snakeGameService.offPlayerLeft(this.onPlayerLeftBound);
-    }
   }
 } 

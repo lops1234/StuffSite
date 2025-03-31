@@ -15,7 +15,10 @@ export default class GameScene extends Phaser.Scene {
   private myConnectionId?: string;
 
   // Game objects
-  private snakeSprites: Map<string, Phaser.GameObjects.Group> = new Map();
+  private snakes: { [connectionId: string]: { 
+    segments: Phaser.GameObjects.Graphics[];
+    connectionId: string;
+  }} = {};
   private flySprites: Phaser.GameObjects.Sprite[] = [];
   private scoreTexts: Map<string, Phaser.GameObjects.Text> = new Map();
   private timerText!: Phaser.GameObjects.Text;
@@ -54,7 +57,7 @@ export default class GameScene extends Phaser.Scene {
     this.createGrid();
     
     // Set up keyboard input
-    this.cursors = this.input.keyboard!.createCursorKeys();
+    this.setupKeyboardInput();
     
     // Add timer text
     this.timerText = this.add.text(
@@ -75,6 +78,47 @@ export default class GameScene extends Phaser.Scene {
     
     // Start the countdown
     this.startCountdown();
+  }
+  
+  private setupKeyboardInput() {
+    // Create cursor keys
+    this.cursors = this.input.keyboard!.createCursorKeys();
+    
+    // Add additional key handlers for improved responsiveness
+    this.input.keyboard!.on('keydown-UP', () => {
+      this.processDirectionChange('up');
+    });
+    
+    this.input.keyboard!.on('keydown-DOWN', () => {
+      this.processDirectionChange('down');
+    });
+    
+    this.input.keyboard!.on('keydown-LEFT', () => {
+      this.processDirectionChange('left');
+    });
+    
+    this.input.keyboard!.on('keydown-RIGHT', () => {
+      this.processDirectionChange('right');
+    });
+    
+    // Add WASD keys for alternative control
+    this.input.keyboard!.on('keydown-W', () => {
+      this.processDirectionChange('up');
+    });
+    
+    this.input.keyboard!.on('keydown-S', () => {
+      this.processDirectionChange('down');
+    });
+    
+    this.input.keyboard!.on('keydown-A', () => {
+      this.processDirectionChange('left');
+    });
+    
+    this.input.keyboard!.on('keydown-D', () => {
+      this.processDirectionChange('right');
+    });
+    
+    console.log('GameScene: Keyboard input initialized');
   }
   
   update() {
@@ -114,13 +158,26 @@ export default class GameScene extends Phaser.Scene {
     // Register handlers
     snakeGameService.onGameStateUpdated(this.gameStateUpdatedBound);
     snakeGameService.onGameEnded(this.gameEndedBound);
+    
+    console.log('GameScene: Event handlers registered');
   }
   
   private async fetchGameState() {
     try {
+      console.log('GameScene: Fetching initial game state for game ID:', this.gameId);
       const gameState = await snakeGameService.getGame(this.gameId);
       if (gameState) {
+        console.log('GameScene: Initial game state received:', JSON.stringify(gameState));
+        
+        // Force log of all players and their snakes
+        console.log('Initial players:');
+        Object.entries(gameState.players).forEach(([connectionId, player]) => {
+          console.log(`Player ${player.name} (${connectionId}): Snake body length ${player.snakeBody.length}`);
+        });
+        
         this.updateGameState(gameState);
+      } else {
+        console.error('GameScene: Game not found');
       }
     } catch (error) {
       console.error('Error fetching game state:', error);
@@ -178,10 +235,12 @@ export default class GameScene extends Phaser.Scene {
   }
   
   private onGameStateUpdated(gameState: SnakeGameState) {
+    console.log('GameScene: Game state updated');
     this.updateGameState(gameState);
   }
   
   private updateGameState(gameState: SnakeGameState) {
+    console.log('Updating game state:', gameState);
     this.gameState = gameState;
     
     // Find my connection ID if not already set
@@ -189,6 +248,7 @@ export default class GameScene extends Phaser.Scene {
       for (const [connectionId, player] of Object.entries(gameState.players)) {
         if (player.name === this.playerName) {
           this.myConnectionId = connectionId;
+          console.log('Found my connection ID:', this.myConnectionId);
           break;
         }
       }
@@ -207,7 +267,7 @@ export default class GameScene extends Phaser.Scene {
     }
     
     // Update snakes
-    this.updateSnakes(gameState);
+    this.updateSnakes();
     
     // Update flies
     this.updateFlies(gameState.flies);
@@ -216,75 +276,171 @@ export default class GameScene extends Phaser.Scene {
     this.updateScores(gameState);
   }
   
-  private updateSnakes(gameState: SnakeGameState) {
-    // Remove snakes that are no longer in the game
-    for (const [connectionId, sprites] of this.snakeSprites.entries()) {
-      if (!gameState.players[connectionId]) {
-        sprites.destroy(true);
-        this.snakeSprites.delete(connectionId);
-      }
-    }
+  private updateSnakes() {
+    if (!this.gameState) return;
+
+    console.log(`Updating snakes for ${Object.keys(this.gameState.players).length} players`);
     
-    // Update or create snakes for all players
-    for (const [connectionId, player] of Object.entries(gameState.players)) {
-      // Destroy existing sprites if body length has changed
-      if (this.snakeSprites.has(connectionId)) {
-        const sprites = this.snakeSprites.get(connectionId)!;
-        if (sprites.getLength() !== player.snakeBody.length) {
-          sprites.destroy(true);
-          this.snakeSprites.delete(connectionId);
+    // Loop through all players
+    Object.entries(this.gameState.players).forEach(([connectionId, player]) => {
+      console.log(`Processing player ${player.name} (${connectionId}), snake length: ${player.snakeBody?.length}`);
+      
+      // Skip if player has no snake body
+      if (!player.snakeBody || player.snakeBody.length === 0) {
+        console.log(`Player ${player.name} has no snake body, skipping rendering`);
+        return;
+      }
+      
+      // Get or create snake container for this player
+      if (!this.snakes[connectionId]) {
+        this.snakes[connectionId] = {
+          segments: [],
+          connectionId: connectionId
+        };
+        console.log(`Created new snake container for player ${player.name}`);
+      }
+      
+      const snake = this.snakes[connectionId];
+      const isCurrentPlayer = connectionId === this.myConnectionId;
+      const colorValue = player.color || (isCurrentPlayer ? 0x00ff00 : 0xff0000);
+      const color = typeof colorValue === 'string' ? parseInt(colorValue.replace('#', '0x'), 16) : colorValue;
+      
+      console.log(`Player ${player.name} snake color: ${color}, is current player: ${isCurrentPlayer}`);
+      
+      // Calculate segment size based on board dimensions
+      const cellSize = this.calculateCellSize();
+      
+      // Update or create snake segments
+      for (let i = 0; i < player.snakeBody.length; i++) {
+        const segment = player.snakeBody[i];
+        
+        if (!segment) {
+          console.warn(`Missing segment at index ${i} for player ${player.name}`);
+          continue;
+        }
+        
+        // Calculate position
+        const x = segment.x * cellSize + cellSize / 2;
+        const y = segment.y * cellSize + cellSize / 2;
+        
+        // Check if segment already exists
+        if (i < snake.segments.length) {
+          // Update existing segment
+          const graphics = snake.segments[i];
+          graphics.clear();
+          graphics.fillStyle(color, 1);
+          graphics.fillRect(-cellSize / 2, -cellSize / 2, cellSize, cellSize);
+          graphics.setPosition(x, y);
+          graphics.setVisible(true);
+          graphics.setDepth(10); // Ensure snake is above background
+          
+          if (i === 0) {
+            // Add eyes to the head
+            const eyeSize = cellSize / 5;
+            const eyeOffset = cellSize / 4;
+            graphics.fillStyle(0x000000, 1);
+            
+            // Direction-based eye positioning
+            switch (player.direction) {
+              case 'up':
+                graphics.fillCircle(-eyeOffset, -eyeOffset, eyeSize);
+                graphics.fillCircle(eyeOffset, -eyeOffset, eyeSize);
+                break;
+              case 'down':
+                graphics.fillCircle(-eyeOffset, eyeOffset, eyeSize);
+                graphics.fillCircle(eyeOffset, eyeOffset, eyeSize);
+                break;
+              case 'left':
+                graphics.fillCircle(-eyeOffset, -eyeOffset, eyeSize);
+                graphics.fillCircle(-eyeOffset, eyeOffset, eyeSize);
+                break;
+              case 'right':
+                graphics.fillCircle(eyeOffset, -eyeOffset, eyeSize);
+                graphics.fillCircle(eyeOffset, eyeOffset, eyeSize);
+                break;
+            }
+          }
+          
+          console.log(`Updated segment ${i} for player ${player.name} at (${x}, ${y})`);
+        } else {
+          // Create new segment
+          const graphics = this.add.graphics();
+          graphics.fillStyle(color, 1);
+          graphics.fillRect(-cellSize / 2, -cellSize / 2, cellSize, cellSize);
+          graphics.setPosition(x, y);
+          graphics.setVisible(true);
+          graphics.setDepth(10); // Ensure snake is above background
+          
+          if (i === 0) {
+            // Add eyes to the head
+            const eyeSize = cellSize / 5;
+            const eyeOffset = cellSize / 4;
+            graphics.fillStyle(0x000000, 1);
+            
+            // Direction-based eye positioning
+            switch (player.direction) {
+              case 'up':
+                graphics.fillCircle(-eyeOffset, -eyeOffset, eyeSize);
+                graphics.fillCircle(eyeOffset, -eyeOffset, eyeSize);
+                break;
+              case 'down':
+                graphics.fillCircle(-eyeOffset, eyeOffset, eyeSize);
+                graphics.fillCircle(eyeOffset, eyeOffset, eyeSize);
+                break;
+              case 'left':
+                graphics.fillCircle(-eyeOffset, -eyeOffset, eyeSize);
+                graphics.fillCircle(-eyeOffset, eyeOffset, eyeSize);
+                break;
+              case 'right':
+                graphics.fillCircle(eyeOffset, -eyeOffset, eyeSize);
+                graphics.fillCircle(eyeOffset, eyeOffset, eyeSize);
+                break;
+            }
+          }
+          
+          snake.segments.push(graphics);
+          console.log(`Created new segment ${i} for player ${player.name} at (${x}, ${y})`);
         }
       }
       
-      // Create new snake sprites if needed
-      if (!this.snakeSprites.has(connectionId) && player.snakeBody.length > 0) {
-        const sprites = this.add.group();
+      // Remove extra segments if snake is now shorter
+      if (snake.segments.length > player.snakeBody.length) {
+        console.log(`Removing ${snake.segments.length - player.snakeBody.length} extra segments for player ${player.name}`);
         
-        // Create sprites for each body segment
-        player.snakeBody.forEach((segment, index) => {
-          const sprite = this.add.sprite(
-            segment.x * this.gridSize + this.gridSize / 2,
-            segment.y * this.gridSize + this.gridSize / 2,
-            index === 0 ? 'snake-head' : 'snake-body'
-          );
-          
-          // Tint the snake based on player color
-          sprite.setTint(this.parseColor(player.color));
-          
-          sprites.add(sprite);
+        for (let i = player.snakeBody.length; i < snake.segments.length; i++) {
+          snake.segments[i].destroy();
+        }
+        
+        snake.segments.splice(player.snakeBody.length);
+      }
+    });
+    
+    // Remove snakes for players who are no longer in the game
+    Object.keys(this.snakes).forEach(connectionId => {
+      if (!this.gameState!.players[connectionId]) {
+        console.log(`Removing snake for player ${connectionId} who left the game`);
+        
+        // Destroy all segments
+        this.snakes[connectionId].segments.forEach(segment => {
+          segment.destroy();
         });
         
-        this.snakeSprites.set(connectionId, sprites);
+        // Remove from snakes object
+        delete this.snakes[connectionId];
       }
-      
-      // Update existing snake positions
-      if (this.snakeSprites.has(connectionId)) {
-        const sprites = this.snakeSprites.get(connectionId)!;
-        sprites.getChildren().forEach((sprite, index) => {
-          const segment = player.snakeBody[index];
-          if (segment) {
-            const spriteObj = sprite as Phaser.GameObjects.Sprite;
-            spriteObj.setPosition(
-              segment.x * this.gridSize + this.gridSize / 2,
-              segment.y * this.gridSize + this.gridSize / 2
-            );
-            
-            // Update head rotation based on direction
-            if (index === 0) {
-              if (player.direction === 'up') {
-                spriteObj.setAngle(-90);
-              } else if (player.direction === 'down') {
-                spriteObj.setAngle(90);
-              } else if (player.direction === 'left') {
-                spriteObj.setAngle(180);
-              } else if (player.direction === 'right') {
-                spriteObj.setAngle(0);
-              }
-            }
-          }
-        });
-      }
-    }
+    });
+  }
+  
+  private calculateCellSize(): number {
+    const boardWidth = this.gameState?.boardWidth || 25;
+    const boardHeight = this.gameState?.boardHeight || 25;
+    
+    // Calculate cell size based on game dimensions
+    const cellSizeX = this.scale.width / boardWidth;
+    const cellSizeY = this.scale.height / boardHeight;
+    
+    // Return the smaller of the two to ensure cells fit within the game area
+    return Math.min(cellSizeX, cellSizeY);
   }
   
   private updateFlies(flies: Point[]) {
@@ -375,13 +531,17 @@ export default class GameScene extends Phaser.Scene {
   }
   
   private handleInput() {
-    if (!this.canChangeDirection || !this.myConnectionId) return;
+    if (!this.canChangeDirection || !this.myConnectionId || !this.gameState?.isActive) return;
     
     // Get current direction
-    const currentDirection = this.gameState?.players[this.myConnectionId]?.direction || 'right';
+    const currentPlayer = this.gameState?.players[this.myConnectionId];
+    if (!currentPlayer) return;
+    
+    const currentDirection = currentPlayer.direction || 'right';
     
     let newDirection = currentDirection;
     
+    // Check for key presses
     if (this.cursors.up.isDown && currentDirection !== 'down') {
       newDirection = 'up';
     } else if (this.cursors.down.isDown && currentDirection !== 'up') {
@@ -392,17 +552,55 @@ export default class GameScene extends Phaser.Scene {
       newDirection = 'right';
     }
     
-    // Send direction update if it has changed
+    // If direction changed, process it
     if (newDirection !== currentDirection) {
+      this.processDirectionChange(newDirection);
+    }
+  }
+  
+  private processDirectionChange(newDirection: string) {
+    if (!this.canChangeDirection || !this.myConnectionId || !this.gameState?.isActive) return;
+    
+    // Get current direction
+    const currentPlayer = this.gameState?.players[this.myConnectionId];
+    if (!currentPlayer) return;
+    
+    const currentDirection = currentPlayer.direction || 'right';
+    
+    // Validate the direction change (prevent 180-degree turns)
+    if ((newDirection === 'up' && currentDirection === 'down') ||
+        (newDirection === 'down' && currentDirection === 'up') ||
+        (newDirection === 'left' && currentDirection === 'right') ||
+        (newDirection === 'right' && currentDirection === 'left')) {
+      return;
+    }
+    
+    // Only send update if direction changed
+    if (newDirection !== currentDirection) {
+      console.log(`Changing direction from ${currentDirection} to ${newDirection}`);
+      
+      // Prevent rapid direction changes
       this.canChangeDirection = false;
       
-      snakeGameService.updateDirection(newDirection, this.gameId)
-        .catch(error => console.error('Error updating direction:', error));
+      // Update local player direction immediately for responsiveness
+      if (this.gameState && this.myConnectionId && this.gameState.players[this.myConnectionId]) {
+        this.gameState.players[this.myConnectionId].direction = newDirection;
+      }
       
-      // Allow next direction change after a short delay
-      this.time.delayedCall(100, () => {
-        this.canChangeDirection = true;
-      });
+      // Send direction update to server
+      snakeGameService.updateDirection(newDirection, this.gameId)
+        .then(() => {
+          console.log(`Direction update sent: ${newDirection}`);
+        })
+        .catch(error => {
+          console.error('Error updating direction:', error);
+        })
+        .finally(() => {
+          // Allow direction changes again after a short delay
+          this.time.delayedCall(100, () => {
+            this.canChangeDirection = true;
+          });
+        });
     }
   }
   
@@ -492,16 +690,67 @@ export default class GameScene extends Phaser.Scene {
   }
   
   private parseColor(colorStr: string): number {
-    return parseInt(colorStr.replace('#', '0x'));
+    // Remove the # if it exists
+    if (colorStr.startsWith('#')) {
+      colorStr = colorStr.substring(1);
+    }
+    
+    // Default to green if invalid color
+    if (!/^[0-9A-Fa-f]{6}$/.test(colorStr)) {
+      console.warn(`Invalid color format: ${colorStr}, using default green`);
+      return 0x00FF00;
+    }
+    
+    // Parse the color string to a number
+    return parseInt(colorStr, 16);
   }
   
   shutdown() {
+    console.log('GameScene: Shutting down, cleaning up resources');
+    
     // Remove event handlers
-    if (this.gameStateUpdatedBound) {
-      snakeGameService.offGameStateUpdated(this.gameStateUpdatedBound);
+    snakeGameService.offGameStateUpdated(this.gameStateUpdatedBound);
+    snakeGameService.offGameEnded(this.gameEndedBound);
+    
+    // Clean up all snake graphics
+    Object.values(this.snakes).forEach(snake => {
+      snake.segments.forEach(segment => {
+        segment.destroy();
+      });
+    });
+    
+    // Clear snake references
+    this.snakes = {};
+    
+    // Clean up fly sprites
+    this.flySprites.forEach(sprite => {
+      sprite.destroy();
+    });
+    this.flySprites = [];
+    
+    // Clean up score texts
+    this.scoreTexts.forEach(text => {
+      text.destroy();
+    });
+    this.scoreTexts.clear();
+    
+    // Clean up other text elements
+    if (this.timerText) {
+      this.timerText.destroy();
     }
-    if (this.gameEndedBound) {
-      snakeGameService.offGameEnded(this.gameEndedBound);
+    
+    if (this.countdownText) {
+      this.countdownText.destroy();
     }
+    
+    if (this.gameOverSprite) {
+      this.gameOverSprite.destroy();
+    }
+    
+    if (this.restartButton) {
+      this.restartButton.destroy();
+    }
+    
+    console.log('GameScene: Cleanup complete');
   }
 } 

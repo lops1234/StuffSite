@@ -316,14 +316,79 @@ public class SnakeGameService : ISnakeGameService
             Color = color
         };
         
-        // Initialize snake at a random position
-        int x = _random.Next(5, 20);
-        int y = _random.Next(5, 20);
+        // Calculate unique starting position based on player count
+        int playerCount = _games.Values
+            .SelectMany(g => g.Players.Values)
+            .Count(p => p.ConnectionId == connectionId);
         
+        // Position snakes in different quadrants of the board
+        int boardQuadrant = playerCount % 4;
+        int startX, startY;
+        string initialDirection;
+        
+        switch (boardQuadrant)
+        {
+            case 0: // Top-left
+                startX = 5;
+                startY = 5;
+                initialDirection = "right";
+                break;
+            case 1: // Top-right
+                startX = 20;
+                startY = 5;
+                initialDirection = "left";
+                break;
+            case 2: // Bottom-left
+                startX = 5;
+                startY = 20;
+                initialDirection = "right";
+                break;
+            case 3: // Bottom-right
+                startX = 20;
+                startY = 20;
+                initialDirection = "left";
+                break;
+            default:
+                startX = 10;
+                startY = 10;
+                initialDirection = "right";
+                break;
+        }
+        
+        // Add random offset to prevent exact overlap if multiple games
+        startX += _random.Next(-2, 3);
+        startY += _random.Next(-2, 3);
+        
+        // Set initial direction
+        player.Direction = initialDirection;
+        
+        // Create snake body based on direction
         for (int i = 0; i < initialLength; i++)
         {
-            player.SnakeBody.Add(new Point(x - i, y));
+            Point segment;
+            switch (initialDirection)
+            {
+                case "right":
+                    segment = new Point(startX - i, startY);
+                    break;
+                case "left":
+                    segment = new Point(startX + i, startY);
+                    break;
+                case "up":
+                    segment = new Point(startX, startY + i);
+                    break;
+                case "down":
+                    segment = new Point(startX, startY - i);
+                    break;
+                default:
+                    segment = new Point(startX - i, startY);
+                    break;
+            }
+            player.SnakeBody.Add(segment);
         }
+        
+        _logger.LogInformation("Created player snake at position ({X},{Y}) with direction {Direction}", 
+            startX, startY, initialDirection);
         
         return player;
     }
@@ -367,17 +432,86 @@ public class SnakeGameService : ISnakeGameService
         // Clear existing snake body
         player.SnakeBody.Clear();
         
-        // Create a new snake in a random position
-        int x = _random.Next(5, game.BoardWidth - 5);
-        int y = _random.Next(5, game.BoardHeight - 5);
+        // Get player index in the current game
+        int playerIndex = game.Players.Values.ToList().FindIndex(p => p.ConnectionId == player.ConnectionId);
+        if (playerIndex < 0) playerIndex = 0;
         
-        for (int i = 0; i < 3; i++)
+        // Position reset snake in different quadrants based on player index
+        int boardQuadrant = playerIndex % 4;
+        int startX, startY;
+        string initialDirection;
+        
+        // Board dimensions
+        int width = game.BoardWidth;
+        int height = game.BoardHeight;
+        
+        switch (boardQuadrant)
         {
-            player.SnakeBody.Add(new Point(x - i, y));
+            case 0: // Top-left quadrant
+                startX = width / 4;
+                startY = height / 4;
+                initialDirection = "right";
+                break;
+            case 1: // Top-right quadrant
+                startX = (width * 3) / 4;
+                startY = height / 4;
+                initialDirection = "left";
+                break;
+            case 2: // Bottom-left quadrant
+                startX = width / 4;
+                startY = (height * 3) / 4;
+                initialDirection = "right";
+                break;
+            case 3: // Bottom-right quadrant
+                startX = (width * 3) / 4;
+                startY = (height * 3) / 4;
+                initialDirection = "left";
+                break;
+            default:
+                startX = width / 2;
+                startY = height / 2;
+                initialDirection = "right";
+                break;
         }
         
-        // Reset direction to right
-        player.Direction = "right";
+        // Add small random offset
+        startX += _random.Next(-3, 4);
+        startY += _random.Next(-3, 4);
+        
+        // Ensure snake is within bounds
+        startX = Math.Max(3, Math.Min(width - 3, startX));
+        startY = Math.Max(3, Math.Min(height - 3, startY));
+        
+        // Reset direction
+        player.Direction = initialDirection;
+        
+        // Create snake body based on direction
+        for (int i = 0; i < 3; i++)
+        {
+            Point segment;
+            switch (initialDirection)
+            {
+                case "right":
+                    segment = new Point(startX - i, startY);
+                    break;
+                case "left":
+                    segment = new Point(startX + i, startY);
+                    break;
+                case "up":
+                    segment = new Point(startX, startY + i);
+                    break;
+                case "down":
+                    segment = new Point(startX, startY - i);
+                    break;
+                default:
+                    segment = new Point(startX - i, startY);
+                    break;
+            }
+            player.SnakeBody.Add(segment);
+        }
+        
+        _logger.LogInformation("Reset player snake at position ({X},{Y}) with direction {Direction}", 
+            startX, startY, initialDirection);
     }
 
     private string GenerateGameId()
