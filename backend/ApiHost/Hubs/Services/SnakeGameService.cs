@@ -338,28 +338,28 @@ public class SnakeGameService : ISnakeGameService
         switch (boardQuadrant)
         {
             case 0: // Top-left
-                startX = 5;
-                startY = 5;
+                startX = 10;
+                startY = 10;
                 initialDirection = "right";
                 break;
             case 1: // Top-right
-                startX = 20;
-                startY = 5;
+                startX = 30;
+                startY = 10;
                 initialDirection = "left";
                 break;
             case 2: // Bottom-left
-                startX = 5;
+                startX = 10;
                 startY = 20;
                 initialDirection = "right";
                 break;
             case 3: // Bottom-right
-                startX = 20;
+                startX = 30;
                 startY = 20;
                 initialDirection = "left";
                 break;
             default:
-                startX = 10;
-                startY = 10;
+                startX = 20;
+                startY = 15;
                 initialDirection = "right";
                 break;
         }

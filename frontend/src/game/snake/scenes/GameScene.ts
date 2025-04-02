@@ -54,6 +54,8 @@ export default class GameScene extends Phaser.Scene {
     this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000)
       .setOrigin(0, 0);
     
+    console.log(`Canvas size: ${this.scale.width}x${this.scale.height}`);
+    
     // Create grid for visual reference
     this.createGrid();
     
@@ -508,12 +510,15 @@ export default class GameScene extends Phaser.Scene {
   }
   
   private calculateCellSize(): number {
-    const boardWidth = this.gameState?.boardWidth || 25;
-    const boardHeight = this.gameState?.boardHeight || 25;
+    const boardWidth = this.gameState?.boardWidth || 40;
+    const boardHeight = this.gameState?.boardHeight || 30;
     
     // Calculate cell size based on game dimensions
     const cellSizeX = this.scale.width / boardWidth;
     const cellSizeY = this.scale.height / boardHeight;
+    
+    console.log(`Calculating cell size for board ${boardWidth}x${boardHeight}, canvas ${this.scale.width}x${this.scale.height}`);
+    console.log(`Cell size X: ${cellSizeX}, Y: ${cellSizeY}, using ${Math.min(cellSizeX, cellSizeY)}`);
     
     // Return the smaller of the two to ensure cells fit within the game area
     return Math.min(cellSizeX, cellSizeY);

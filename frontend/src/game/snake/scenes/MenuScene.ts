@@ -382,8 +382,8 @@ export default class MenuScene extends Phaser.Scene {
           return snakeGameService.createGame({
             playerName: this.playerName,
             settings: {
-              boardWidth: 25,
-              boardHeight: 25,
+              boardWidth: 40,
+              boardHeight: 30,
               initialSnakeLength: 3,
               maxPlayers: 4,
               gameDuration: 180,

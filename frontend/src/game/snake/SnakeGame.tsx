@@ -167,13 +167,14 @@ const SnakeGame: React.FC = () => {
           align-items: center;
           width: 100%;
           height: 100%;
-          min-height: 600px;
+          min-height: 800px;
           position: relative;
           overflow: visible;
         }
         .snake-game-canvas {
-          width: 800px;
-          height: 600px;
+          width: 100%;
+          height: 800px;
+          max-width: 1200px;
           box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
           border-radius: 4px;
           overflow: visible;
@@ -182,6 +183,8 @@ const SnakeGame: React.FC = () => {
         }
         canvas {
           display: block;
+          width: 100%;
+          height: 100%;
         }
         `}
       </style>
