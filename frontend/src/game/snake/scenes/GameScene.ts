@@ -28,6 +28,7 @@ export default class GameScene extends Phaser.Scene {
   private restartButton?: Phaser.GameObjects.Text;
   private countdownText?: Phaser.GameObjects.Text;
   private isGameOver: boolean = false;
+  private debugGraphics?: Phaser.GameObjects.Graphics;
   
   // Input
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -58,6 +59,12 @@ export default class GameScene extends Phaser.Scene {
     
     // Set up keyboard input
     this.setupKeyboardInput();
+    
+    // Check if 'fly' texture exists, if not create a placeholder
+    if (!this.textures.exists('fly')) {
+      console.warn('Fly texture not found, creating placeholder');
+      this.createFlyTexture();
+    }
     
     // Add timer text
     this.timerText = this.add.text(
@@ -130,24 +137,80 @@ export default class GameScene extends Phaser.Scene {
     this.handleInput();
   }
   
+  private createFlyTexture() {
+    // Create a fly texture programmatically
+    const graphics = this.make.graphics({x: 0, y: 0});
+    
+    // Draw a more visible fly with contrasting colors
+    // Draw a bright red circle with a white outline
+    graphics.fillStyle(0xff0000, 1);  // Bright red
+    graphics.fillCircle(8, 8, 7);     // Slightly smaller than previous
+    
+    // Add white outline for better visibility
+    graphics.lineStyle(2, 0xffffff, 1);
+    graphics.strokeCircle(8, 8, 7);
+    
+    // Add details to make it look more like a fly
+    graphics.fillStyle(0x000000, 1);  // Black
+    
+    // Wings (small ovals on sides)
+    graphics.fillEllipse(4, 4, 4, 2);
+    graphics.fillEllipse(12, 4, 4, 2);
+    
+    // Create a texture from the graphics
+    graphics.generateTexture('fly', 16, 16);
+    
+    // Create animation for the fly (pulsing effect)
+    this.anims.create({
+      key: 'fly',
+      frames: [
+        { key: 'fly', frame: 0 }
+      ],
+      frameRate: 10,
+      repeat: -1,
+      yoyo: true  // Alternates between regular and reversed frames for pulsing effect
+    });
+    
+    console.log('Created custom fly texture');
+  }
+  
   private createGrid() {
     // Create a grid pattern on the background
     const graphics = this.add.graphics();
+    
+    // Calculate cell size
+    const cellSize = this.calculateCellSize();
+    
+    // Use brighter lines for better visibility
     graphics.lineStyle(1, 0x333333, 0.8);
     
     // Draw vertical lines
-    for (let x = 0; x <= this.scale.width; x += this.gridSize) {
+    for (let x = 0; x <= this.scale.width; x += cellSize) {
       graphics.moveTo(x, 0);
       graphics.lineTo(x, this.scale.height);
     }
     
     // Draw horizontal lines
-    for (let y = 0; y <= this.scale.height; y += this.gridSize) {
+    for (let y = 0; y <= this.scale.height; y += cellSize) {
       graphics.moveTo(0, y);
       graphics.lineTo(this.scale.width, y);
     }
     
     graphics.strokePath();
+    
+    // Add visual indicators at cell centers for debugging if needed
+    if (this.gameState) {
+      for (let x = 0; x < this.gameState.boardWidth; x++) {
+        for (let y = 0; y < this.gameState.boardHeight; y++) {
+          const centerX = x * cellSize + cellSize / 2;
+          const centerY = y * cellSize + cellSize / 2;
+          
+          // Add small dot at center of each cell
+          const dot = this.add.circle(centerX, centerY, 2, 0x666666, 0.5);
+          dot.setDepth(1);
+        }
+      }
+    }
   }
   
   private setupEventHandlers() {
@@ -241,7 +304,20 @@ export default class GameScene extends Phaser.Scene {
   
   private updateGameState(gameState: SnakeGameState) {
     console.log('Updating game state:', gameState);
+    
+    // Check if board dimensions have changed
+    const boardSizeChanged = !this.gameState || 
+      this.gameState.boardWidth !== gameState.boardWidth || 
+      this.gameState.boardHeight !== gameState.boardHeight;
+    
+    // Update the game state
     this.gameState = gameState;
+    
+    // Refresh the grid if board dimensions changed
+    if (boardSizeChanged) {
+      console.log('Board dimensions changed, refreshing grid');
+      this.createGrid();
+    }
     
     // Find my connection ID if not already set
     if (!this.myConnectionId) {
@@ -456,15 +532,43 @@ export default class GameScene extends Phaser.Scene {
     while (this.flySprites.length < flies.length) {
       const sprite = this.add.sprite(0, 0, 'fly');
       sprite.play('fly');
+      sprite.setDepth(5); // Set depth to ensure flies are visible above background but below snakes
       this.flySprites.push(sprite);
     }
     
+    // Calculate the cell size based on board dimensions
+    const cellSize = this.calculateCellSize();
+    
     // Update fly positions
     flies.forEach((fly, index) => {
-      this.flySprites[index].setPosition(
-        fly.x * this.gridSize + this.gridSize / 2,
-        fly.y * this.gridSize + this.gridSize / 2
-      );
+      const x = fly.x * cellSize + cellSize / 2;
+      const y = fly.y * cellSize + cellSize / 2;
+      
+      console.log(`Positioning fly ${index} at grid (${fly.x}, ${fly.y}) -> screen (${x}, ${y}), cellSize: ${cellSize}`);
+      
+      this.flySprites[index].setPosition(x, y);
+      
+      // Make flies slightly smaller than grid cells to ensure clear visibility
+      this.flySprites[index].setDisplaySize(cellSize * 0.7, cellSize * 0.7);
+      
+      // Optional: Add hitbox visualization for debugging
+      if (index === 0) { // Only for the first fly to avoid cluttering the display
+        // If a debug graphics object already exists, destroy it
+        if (this.debugGraphics) {
+          this.debugGraphics.destroy();
+        }
+        
+        // Create a new debug graphics object
+        this.debugGraphics = this.add.graphics();
+        this.debugGraphics.lineStyle(2, 0xffff00, 0.5);
+        this.debugGraphics.strokeRect(
+          fly.x * cellSize, 
+          fly.y * cellSize, 
+          cellSize, 
+          cellSize
+        );
+        this.debugGraphics.setDepth(3); // Below flies but above background
+      }
     });
   }
   
@@ -749,6 +853,12 @@ export default class GameScene extends Phaser.Scene {
     
     if (this.restartButton) {
       this.restartButton.destroy();
+    }
+    
+    // Clean up debug graphics
+    if (this.debugGraphics) {
+      this.debugGraphics.destroy();
+      this.debugGraphics = undefined;
     }
     
     console.log('GameScene: Cleanup complete');
