@@ -226,7 +226,14 @@ public class SnakeGameService : ISnakeGameService
             bool ateFly = false;
             for (int i = 0; i < game.Flies.Count; i++)
             {
-                if (newHead.X == game.Flies[i].X && newHead.Y == game.Flies[i].Y)
+                var fly = game.Flies[i];
+                
+                // Log the position checking for debugging
+                _logger.LogDebug("Checking if player {PlayerName} head at ({HeadX},{HeadY}) collides with fly at ({FlyX},{FlyY})",
+                    player.Name, newHead.X, newHead.Y, fly.X, fly.Y);
+                    
+                // Exact position match
+                if (newHead.X == fly.X && newHead.Y == fly.Y)
                 {
                     // Remove this fly
                     game.Flies.RemoveAt(i);
@@ -239,6 +246,8 @@ public class SnakeGameService : ISnakeGameService
                     
                     // Snake grows
                     ateFly = true;
+                    _logger.LogInformation("Player {PlayerName} ate fly at position ({X},{Y}), new score: {Score}", 
+                        player.Name, fly.X, fly.Y, player.Score);
                     break;
                 }
             }
