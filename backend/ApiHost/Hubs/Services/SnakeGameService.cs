@@ -23,6 +23,10 @@ public class SnakeGameService : ISnakeGameService
     private readonly Random _random = new();
     private readonly ILogger<SnakeGameService> _logger;
     
+    // Game update constants
+    private const int MovementSpeed = 12; // Number of cells moved per second
+    private readonly Dictionary<string, DateTime> _lastMoveTimeByGame = new();
+    
     // Available colors for players
     private readonly string[] _playerColors = new[]
     {
@@ -167,8 +171,15 @@ public class SnakeGameService : ISnakeGameService
     {
         if (_games.TryGetValue(gameId, out var game) && !game.IsActive)
         {
+            // Set both StartTime and LastUpdate when starting the game
+            var now = DateTime.UtcNow;
+            game.StartTime = now;
+            game.LastUpdate = now;
             game.IsActive = true;
-            game.LastUpdate = DateTime.UtcNow;
+            
+            // Initialize movement timing
+            _lastMoveTimeByGame[gameId] = now;
+            
             _logger.LogInformation("Game {GameId} started with {PlayerCount} players", gameId, game.Players.Count);
             return true;
         }
@@ -183,115 +194,156 @@ public class SnakeGameService : ISnakeGameService
             return null;
         }
         
-        // If game has been running for longer than the duration, end it
-        if ((DateTime.UtcNow - game.LastUpdate).TotalSeconds > game.GameDuration)
+        // Calculate the current time once to use consistently
+        var currentTime = DateTime.UtcNow;
+        
+        // Calculate elapsed time based on StartTime, not LastUpdate
+        var totalElapsedSeconds = (currentTime - game.StartTime).TotalSeconds;
+        var timeLeftSeconds = game.GameDuration - totalElapsedSeconds;
+        
+        _logger.LogDebug("Game {GameId} time check: Duration={Duration}s, Total Elapsed={Elapsed}s, Time Left={TimeLeft}s", 
+            gameId, game.GameDuration, totalElapsedSeconds, timeLeftSeconds);
+            
+        // Check if time is up
+        if (timeLeftSeconds <= 0)
         {
             game.IsActive = false;
             _logger.LogInformation("Game {GameId} ended due to time limit", gameId);
+            
+            // Update LastUpdate for the final state
+            game.LastUpdate = currentTime;
+            
+            // Clean up movement timing
+            _lastMoveTimeByGame.Remove(gameId);
+            
             return game;
         }
         
-        // Move each snake
-        foreach (var player in game.Players.Values)
+        // Calculate if it's time to move the snakes
+        bool shouldMoveSnakes = false;
+        if (!_lastMoveTimeByGame.TryGetValue(gameId, out var lastMoveTime))
         {
-            if (player.SnakeBody.Count == 0) continue;
-            
-            var head = player.SnakeBody[0];
-            Point newHead = head;
-            
-            // Move the head based on direction
-            switch (player.Direction)
+            lastMoveTime = game.LastUpdate;
+            _lastMoveTimeByGame[gameId] = lastMoveTime;
+        }
+        
+        var timeSinceLastMove = currentTime - lastMoveTime;
+        var moveThreshold = TimeSpan.FromSeconds(1.0 / MovementSpeed);
+        
+        if (timeSinceLastMove >= moveThreshold)
+        {
+            shouldMoveSnakes = true;
+            _lastMoveTimeByGame[gameId] = currentTime;
+            _logger.LogDebug("Moving snakes for game {GameId} after {ElapsedMS}ms", gameId, timeSinceLastMove.TotalMilliseconds);
+        }
+        
+        // Move each snake if it's time to do so
+        if (shouldMoveSnakes)
+        {
+            foreach (var player in game.Players.Values)
             {
-                case "up":
-                    newHead = new Point(head.X, head.Y - 1);
-                    break;
-                case "down":
-                    newHead = new Point(head.X, head.Y + 1);
-                    break;
-                case "left":
-                    newHead = new Point(head.X - 1, head.Y);
-                    break;
-                case "right":
-                    newHead = new Point(head.X + 1, head.Y);
-                    break;
-            }
-            
-            // Check for wall collisions (wrap around)
-            if (newHead.X < 0) newHead.X = game.BoardWidth - 1;
-            if (newHead.X >= game.BoardWidth) newHead.X = 0;
-            if (newHead.Y < 0) newHead.Y = game.BoardHeight - 1;
-            if (newHead.Y >= game.BoardHeight) newHead.Y = 0;
-            
-            // Check for collision with flies
-            bool ateFly = false;
-            for (int i = 0; i < game.Flies.Count; i++)
-            {
-                var fly = game.Flies[i];
+                if (player.SnakeBody.Count == 0) continue;
                 
-                // Log the position checking for debugging
-                _logger.LogDebug("Checking if player {PlayerName} head at ({HeadX},{HeadY}) collides with fly at ({FlyX},{FlyY})",
-                    player.Name, newHead.X, newHead.Y, fly.X, fly.Y);
-                    
-                // Exact position match
-                if (newHead.X == fly.X && newHead.Y == fly.Y)
+                var head = player.SnakeBody[0];
+                Point newHead = head;
+                
+                // Move the head based on direction
+                switch (player.Direction)
                 {
-                    // Remove this fly
-                    game.Flies.RemoveAt(i);
-                    
-                    // Add a new fly
-                    AddFly(game);
-                    
-                    // Increment player score
-                    player.Score += 10;
-                    
-                    // Snake grows
-                    ateFly = true;
-                    _logger.LogInformation("Player {PlayerName} ate fly at position ({X},{Y}), new score: {Score}", 
-                        player.Name, fly.X, fly.Y, player.Score);
-                    break;
+                    case "up":
+                        newHead = new Point(head.X, head.Y - 1);
+                        break;
+                    case "down":
+                        newHead = new Point(head.X, head.Y + 1);
+                        break;
+                    case "left":
+                        newHead = new Point(head.X - 1, head.Y);
+                        break;
+                    case "right":
+                        newHead = new Point(head.X + 1, head.Y);
+                        break;
                 }
-            }
-            
-            // Check for collisions with other snakes or self
-            bool collision = false;
-            foreach (var otherPlayer in game.Players.Values)
-            {
-                // Skip the first segment of the current player's snake if we're checking self-collision
-                int startIdx = player == otherPlayer ? 1 : 0;
                 
-                for (int i = startIdx; i < otherPlayer.SnakeBody.Count; i++)
+                // Check for wall collisions (wrap around)
+                if (newHead.X < 0) newHead.X = game.BoardWidth - 1;
+                if (newHead.X >= game.BoardWidth) newHead.X = 0;
+                if (newHead.Y < 0) newHead.Y = game.BoardHeight - 1;
+                if (newHead.Y >= game.BoardHeight) newHead.Y = 0;
+                
+                // Check for collision with flies
+                bool ateFly = false;
+                for (int i = 0; i < game.Flies.Count; i++)
                 {
-                    if (newHead.X == otherPlayer.SnakeBody[i].X && newHead.Y == otherPlayer.SnakeBody[i].Y)
+                    var fly = game.Flies[i];
+                    
+                    // Log the position checking for debugging
+                    _logger.LogDebug("Checking if player {PlayerName} head at ({HeadX},{HeadY}) collides with fly at ({FlyX},{FlyY})",
+                        player.Name, newHead.X, newHead.Y, fly.X, fly.Y);
+                        
+                    // Exact position match
+                    if (newHead.X == fly.X && newHead.Y == fly.Y)
                     {
-                        collision = true;
+                        // Remove this fly
+                        game.Flies.RemoveAt(i);
+                        
+                        // Add a new fly
+                        AddFly(game);
+                        
+                        // Increment player score
+                        player.Score += 10;
+                        
+                        // Snake grows
+                        ateFly = true;
+                        _logger.LogInformation("Player {PlayerName} ate fly at position ({X},{Y}), new score: {Score}", 
+                            player.Name, fly.X, fly.Y, player.Score);
                         break;
                     }
                 }
                 
-                if (collision) break;
-            }
-            
-            if (collision)
-            {
-                // Reset the snake
-                ResetPlayerSnake(game, player);
+                // Check for collisions with other snakes or self
+                bool collision = false;
+                foreach (var otherPlayer in game.Players.Values)
+                {
+                    // Skip the first segment of the current player's snake if we're checking self-collision
+                    int startIdx = player == otherPlayer ? 1 : 0;
+                    
+                    for (int i = startIdx; i < otherPlayer.SnakeBody.Count; i++)
+                    {
+                        if (newHead.X == otherPlayer.SnakeBody[i].X && newHead.Y == otherPlayer.SnakeBody[i].Y)
+                        {
+                            collision = true;
+                            break;
+                        }
+                    }
+                    
+                    if (collision) break;
+                }
                 
-                // Deduct points for collision
-                player.Score = Math.Max(0, player.Score - 5);
-                continue;
-            }
-            
-            // Add the new head
-            player.SnakeBody.Insert(0, newHead);
-            
-            // If we didn't eat a fly, remove the tail
-            if (!ateFly)
-            {
-                player.SnakeBody.RemoveAt(player.SnakeBody.Count - 1);
+                if (collision)
+                {
+                    // Reset the snake
+                    ResetPlayerSnake(game, player);
+                    
+                    // Deduct points for collision
+                    player.Score = Math.Max(0, player.Score - 5);
+                    continue;
+                }
+                
+                // Add the new head
+                player.SnakeBody.Insert(0, newHead);
+                
+                // If we didn't eat a fly, remove the tail
+                if (!ateFly)
+                {
+                    player.SnakeBody.RemoveAt(player.SnakeBody.Count - 1);
+                }
             }
         }
         
-        game.LastUpdate = DateTime.UtcNow;
+        // Always update the last update timestamp
+        game.LastUpdate = currentTime;
+        
+        // Always return the game state, even if snakes didn't move
         return game;
     }
 

@@ -13,6 +13,7 @@ export default class GameScene extends Phaser.Scene {
   private gameState?: SnakeGameState;
   private gridSize: number = 16; // Size of each grid cell in pixels
   private myConnectionId?: string;
+  private lastTimeUpdate: number = 0;
 
   // Game objects
   private snakes: { [connectionId: string]: { 
@@ -72,12 +73,15 @@ export default class GameScene extends Phaser.Scene {
     this.timerText = this.add.text(
       this.scale.width / 2,
       20,
-      'Time: 3:00',
+      'Time: 0:30',
       {
         fontSize: '24px',
         color: '#FFFFFF'
       }
     ).setOrigin(0.5, 0);
+    
+    // Initialize time tracking
+    this.lastTimeUpdate = this.time.now;
     
     // Register event handlers
     this.setupEventHandlers();
@@ -130,13 +134,70 @@ export default class GameScene extends Phaser.Scene {
     console.log('GameScene: Keyboard input initialized');
   }
   
-  update() {
+  update(time: number, delta: number) {
     if (this.isGameOver || !this.gameState || !this.gameState.isActive) {
       return;
     }
     
     // Handle keyboard input for direction changes
     this.handleInput();
+    
+    // Update timer every second
+    this.updateTimer();
+  }
+  
+  private updateTimer() {
+    if (!this.gameState || !this.gameState.isActive || this.isGameOver) {
+      return;
+    }
+    
+    // Only update once per second
+    if (this.time.now - this.lastTimeUpdate >= 1000) {
+      this.lastTimeUpdate = this.time.now;
+      
+      // Calculate time based on server start time instead of decrementing
+      const now = new Date();
+      const startTime = new Date(this.gameState.startTime);
+      const elapsedSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+      this.timeLeft = Math.max(0, this.gameState.gameDuration - elapsedSeconds);
+      
+      // Update timer display
+      const minutes = Math.floor(this.timeLeft / 60);
+      const seconds = this.timeLeft % 60;
+      this.timerText.setText(`Time: ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`);
+      
+      // Check if time is up
+      if (this.timeLeft <= 0) {
+        console.log('Time is up!');
+        
+        // Highlight timer in red when time is almost up
+        this.timerText.setColor('#FF0000');
+        
+        // Game will end automatically from server, but we can prepare the UI
+        if (!this.isGameOver) {
+          this.timerText.setText('Time: 0:00');
+          
+          // Notify server to make sure game ends (as a backup)
+          this.time.delayedCall(500, () => {
+            if (!this.isGameOver) {
+              console.log('Requesting final game state update due to timer expiry');
+              this.fetchGameState();
+            }
+          });
+        }
+      } else if (this.timeLeft <= 5) {
+        // Highlight timer in red when time is almost up
+        this.timerText.setColor('#FF0000');
+        
+        // Pulse the timer for emphasis
+        this.tweens.add({
+          targets: this.timerText,
+          scale: { from: 1, to: 1.2 },
+          duration: 200,
+          yoyo: true
+        });
+      }
+    }
   }
   
   private createFlyTexture() {
@@ -332,16 +393,38 @@ export default class GameScene extends Phaser.Scene {
       }
     }
     
-    // Update timer
+    // Update timer with accurate server time
     if (gameState.isActive) {
+      // Calculate remaining time based on server's start time and game duration
       const now = new Date();
-      const lastUpdate = new Date(gameState.lastUpdate);
-      const elapsedSeconds = Math.floor((now.getTime() - lastUpdate.getTime()) / 1000);
+      const startTime = new Date(gameState.startTime);
+      const elapsedSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000);
       this.timeLeft = Math.max(0, gameState.gameDuration - elapsedSeconds);
+      
+      console.log(`Timer update: ${this.timeLeft} seconds left. Game start: ${startTime.toISOString()}, elapsed: ${elapsedSeconds}s`);
       
       const minutes = Math.floor(this.timeLeft / 60);
       const seconds = this.timeLeft % 60;
       this.timerText.setText(`Time: ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`);
+      
+      // Set text color based on time remaining
+      if (this.timeLeft <= 5) {
+        this.timerText.setColor('#FF0000');
+      } else {
+        this.timerText.setColor('#FFFFFF');
+      }
+      
+      // Check if game should end
+      if (this.timeLeft <= 0 && !this.isGameOver) {
+        console.log('Time is up based on server time! Game should end soon.');
+        this.timerText.setText('Time: 0:00');
+        this.timerText.setColor('#FF0000');
+      }
+    } else if (!gameState.isActive && this.timeLeft > 0) {
+      // Game ended before timer ran out
+      this.timeLeft = 0;
+      this.timerText.setText('Time: 0:00');
+      this.timerText.setColor('#FF0000');
     }
     
     // Update snakes
@@ -754,7 +837,7 @@ export default class GameScene extends Phaser.Scene {
     // Display scores
     sortedPlayers.forEach((player, index) => {
       const isMe = player.name === this.playerName;
-      const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
+      const medal = index === 0 ? '\uD83E\uDD47' : index === 1 ? '\uD83E\uDD48' : index === 2 ? '\uD83E\uDD49' : ''; // Unicode for medals
       
       this.add.text(
         this.scale.width / 2,

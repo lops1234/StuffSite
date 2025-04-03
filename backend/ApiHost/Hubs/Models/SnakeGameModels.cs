@@ -26,8 +26,9 @@ public class SnakeGameState
     public int BoardWidth { get; set; } = 40;
     public int BoardHeight { get; set; } = 30;
     public DateTime LastUpdate { get; set; } = DateTime.UtcNow;
+    public DateTime StartTime { get; set; } = DateTime.UtcNow;
     public int MaxPlayers { get; set; } = 4;
-    public int GameDuration { get; set; } = 180; // 3 minutes in seconds
+    public int GameDuration { get; set; } = 30; // 30 seconds
 }
 
 // Game settings
@@ -37,7 +38,7 @@ public class SnakeGameSettings
     public int BoardHeight { get; set; } = 30;
     public int InitialSnakeLength { get; set; } = 3;
     public int MaxPlayers { get; set; } = 4;
-    public int GameDuration { get; set; } = 180; // 3 minutes in seconds
+    public int GameDuration { get; set; } = 30; // 30 seconds
     public int FlyCount { get; set; } = 5;
 }
 

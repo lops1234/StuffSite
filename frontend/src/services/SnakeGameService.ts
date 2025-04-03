@@ -25,6 +25,7 @@ export interface SnakeGameState {
   boardWidth: number;
   boardHeight: number;
   lastUpdate: string;
+  startTime: string;
   maxPlayers: number;
   gameDuration: number;
 }

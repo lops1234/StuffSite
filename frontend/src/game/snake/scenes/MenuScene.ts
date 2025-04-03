@@ -386,7 +386,7 @@ export default class MenuScene extends Phaser.Scene {
               boardHeight: 30,
               initialSnakeLength: 3,
               maxPlayers: 4,
-              gameDuration: 180,
+              gameDuration: 30,
               flyCount: 5
             }
           });

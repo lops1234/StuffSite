@@ -11,11 +11,11 @@ public class SnakeGameHub : Hub
     private readonly IHubContext<SnakeGameHub> _hubContext;
     private static readonly SemaphoreSlim _lock = new(1, 1);
     
-    // Timer to update game state
-    private static Timer? _gameUpdateTimer;
-    
     // Timer to clean up inactive games
     private static Timer? _cleanupTimer;
+    
+    private static Dictionary<string, Timer> _gameTimers = new Dictionary<string, Timer>();
+    private static readonly object _timerLock = new object();
     
     public SnakeGameHub(
         ISnakeGameService gameService, 
@@ -26,12 +26,7 @@ public class SnakeGameHub : Hub
         _logger = logger;
         _hubContext = hubContext;
         
-        // Initialize timers if they haven't been initialized yet
-        if (_gameUpdateTimer == null)
-        {
-            _gameUpdateTimer = new Timer(UpdateGames, null, TimeSpan.Zero, TimeSpan.FromMilliseconds(100));
-        }
-        
+        // Initialize cleanup timer if not already initialized
         if (_cleanupTimer == null)
         {
             _cleanupTimer = new Timer(CleanupInactiveGames, null, TimeSpan.Zero, TimeSpan.FromMinutes(5));
@@ -93,6 +88,18 @@ public class SnakeGameHub : Hub
         if (result)
         {
             await _hubContext.Clients.Group(gameId).SendAsync("GameStarted", game);
+            
+            // Start with initial game state
+            var gameState = _gameService.UpdateGameState(gameId);
+            
+            if (gameState != null)
+            {
+                // Notify all clients of the initial state
+                await _hubContext.Clients.Group(gameId).SendAsync("GameStateUpdated", gameState);
+                
+                // Create a timer to update the game state every 200ms (5 updates per second)
+                StartGameTimer(gameId);
+            }
         }
         
         return result;
@@ -157,41 +164,6 @@ public class SnakeGameHub : Hub
         await base.OnDisconnectedAsync(exception);
     }
     
-    // Timer callback to update game states
-    private async void UpdateGames(object? state)
-    {
-        try
-        {
-            await _lock.WaitAsync();
-            
-            var gameIds = _gameService.GetActiveGameIds().ToList();
-            
-            foreach (var gameId in gameIds)
-            {
-                var updatedGame = _gameService.UpdateGameState(gameId);
-                
-                if (updatedGame != null)
-                {
-                    await _hubContext.Clients.Group(gameId).SendAsync("GameStateUpdated", updatedGame);
-                    
-                    // If the game just ended, notify players
-                    if (!updatedGame.IsActive)
-                    {
-                        await _hubContext.Clients.Group(gameId).SendAsync("GameEnded", updatedGame);
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error updating game states");
-        }
-        finally
-        {
-            _lock.Release();
-        }
-    }
-    
     // Timer callback to clean up inactive games
     private void CleanupInactiveGames(object? state)
     {
@@ -202,6 +174,76 @@ public class SnakeGameHub : Hub
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error cleaning up inactive games");
+        }
+    }
+    
+    private void StartGameTimer(string gameId)
+    {
+        lock (_timerLock)
+        {
+            // Clean up any existing timer
+            if (_gameTimers.ContainsKey(gameId))
+            {
+                _gameTimers[gameId].Dispose();
+            }
+            
+            // Create a new timer that fires every 50ms (20 updates per second) for very smooth movement
+            var timer = new Timer(UpdateGameCallback, gameId, 0, 50);
+            _gameTimers[gameId] = timer;
+            
+            _logger.LogInformation("Started game timer for game {GameId}", gameId);
+        }
+    }
+    
+    private async void UpdateGameCallback(object? state)
+    {
+        if (state == null) return;
+        
+        string gameId = (string)state;
+        
+        try
+        {
+            var gameState = _gameService.UpdateGameState(gameId);
+            
+            if (gameState != null)
+            {
+                if (gameState.IsActive)
+                {
+                    // Game is still active, broadcast updates
+                    await _hubContext.Clients.Group(gameId).SendAsync("GameStateUpdated", gameState);
+                }
+                else
+                {
+                    // Game has ended, stop the timer and notify clients
+                    StopGameTimer(gameId);
+                    await _hubContext.Clients.Group(gameId).SendAsync("GameEnded", gameState);
+                    
+                    _logger.LogInformation("Game {GameId} has ended", gameId);
+                }
+            }
+            else
+            {
+                // Game not found or already ended, stop the timer
+                StopGameTimer(gameId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating game {GameId}", gameId);
+        }
+    }
+    
+    private void StopGameTimer(string gameId)
+    {
+        lock (_timerLock)
+        {
+            if (_gameTimers.ContainsKey(gameId))
+            {
+                _gameTimers[gameId].Dispose();
+                _gameTimers.Remove(gameId);
+                
+                _logger.LogInformation("Stopped game timer for game {GameId}", gameId);
+            }
         }
     }
 } 
