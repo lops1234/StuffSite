@@ -283,6 +283,61 @@ export default class MenuScene extends Phaser.Scene {
       repeat: -1
     });
     
+    // Add paste button (clipboard icon) for game ID input
+    if (this.inputMode === 'gameId') {
+      const pasteButton = this.add.rectangle(
+        140, // Position to the right of the input field
+        0,
+        36,
+        36,
+        0x555555
+      ).setStrokeStyle(1, 0xffffff);
+      
+      pasteButton.setInteractive({ useHandCursor: true });
+      
+      // Clipboard icon (simplified)
+      const clipboardIcon = this.add.text(
+        140,
+        0,
+        "📋", // Unicode clipboard icon
+        {
+          fontSize: '20px'
+        }
+      ).setOrigin(0.5);
+      
+      // Paste functionality
+      pasteButton.on('pointerover', () => {
+        pasteButton.setFillStyle(0x777777);
+      });
+      
+      pasteButton.on('pointerout', () => {
+        pasteButton.setFillStyle(0x555555);
+      });
+      
+      pasteButton.on('pointerdown', async () => {
+        try {
+          // Use clipboard API to get text
+          const text = await navigator.clipboard.readText();
+          
+          // Trim and validate text (for game IDs we typically want alphanumeric content)
+          const validText = text.trim().substring(0, 8); // Limit to 8 characters
+          
+          // Set the input value
+          this.inputValue = validText;
+          this.inputField.setText(this.inputValue);
+          
+          // Update cursor position
+          cursor.setPosition(this.inputField.x + this.inputField.width + 2, cursor.y);
+        } catch (error) {
+          console.error('Failed to read clipboard contents:', error);
+          this.showError('Could not access clipboard. Try manually typing the Game ID.');
+        }
+      });
+      
+      // Add paste button to panel
+      this.inputPanel.add([pasteButton, clipboardIcon]);
+    }
+    
     // Submit button
     const submitButton = this.createButton(0, 70, 'Submit', 0x00aa00, 0x00ff00, () => {
       onSubmit(this.inputValue);
@@ -293,35 +348,66 @@ export default class MenuScene extends Phaser.Scene {
     this.inputPanel.add([panel, titleText, inputBackground, this.inputField, cursor, submitButton]);
     
     // Set up keyboard input
-    this.input.keyboard.off('keydown'); // Remove any existing listeners
-    this.input.keyboard.on('keydown', (event: KeyboardEvent) => {
-      if (event.key === 'Enter') {
-        // Submit on Enter
-        onSubmit(this.inputValue);
-        this.inputPanel.setVisible(false);
-      } else if (event.key === 'Escape') {
-        // Cancel on Escape
-        this.inputPanel.setVisible(false);
-      } else if (event.key === 'Backspace') {
-        // Handle backspace
-        if (this.inputValue.length > 0) {
-          this.inputValue = this.inputValue.slice(0, -1);
-          this.inputField.setText(this.inputValue);
-          cursor.setPosition(this.inputField.x + this.inputField.width + 2, cursor.y);
+    if (this.input.keyboard) {
+      this.input.keyboard.off('keydown'); // Remove any existing listeners
+      this.input.keyboard.on('keydown', (event: KeyboardEvent) => {
+        // Clipboard paste operation (Ctrl+V or Command+V)
+        if ((event.ctrlKey || event.metaKey) && event.key === 'v') {
+          // Prevent default to avoid competing with our clipboard handler
+          event.preventDefault();
+          
+          // Use clipboard API
+          navigator.clipboard.readText()
+            .then(text => {
+              // Handle the pasted text based on input mode
+              if (this.inputMode === 'gameId') {
+                const validText = text.trim().substring(0, 8);
+                this.inputValue = validText;
+              } else {
+                // For name input, limit to 15 characters
+                const validText = text.trim().substring(0, 15);
+                this.inputValue = validText;
+              }
+              
+              // Update the text field
+              this.inputField.setText(this.inputValue);
+              cursor.setPosition(this.inputField.x + this.inputField.width + 2, cursor.y);
+            })
+            .catch(err => {
+              console.error('Failed to read clipboard:', err);
+            });
+            
+          return;
         }
-      } else if (event.key.length === 1) {
-        // Add character to input
-        if (this.inputMode === 'gameId' && this.inputValue.length < 8) {
-          this.inputValue += event.key;
-          this.inputField.setText(this.inputValue);
-          cursor.setPosition(this.inputField.x + this.inputField.width + 2, cursor.y);
-        } else if (this.inputMode === 'name' && this.inputValue.length < 15) {
-          this.inputValue += event.key;
-          this.inputField.setText(this.inputValue);
-          cursor.setPosition(this.inputField.x + this.inputField.width + 2, cursor.y);
+        
+        if (event.key === 'Enter') {
+          // Submit on Enter
+          onSubmit(this.inputValue);
+          this.inputPanel.setVisible(false);
+        } else if (event.key === 'Escape') {
+          // Cancel on Escape
+          this.inputPanel.setVisible(false);
+        } else if (event.key === 'Backspace') {
+          // Handle backspace
+          if (this.inputValue.length > 0) {
+            this.inputValue = this.inputValue.slice(0, -1);
+            this.inputField.setText(this.inputValue);
+            cursor.setPosition(this.inputField.x + this.inputField.width + 2, cursor.y);
+          }
+        } else if (event.key.length === 1) {
+          // Add character to input
+          if (this.inputMode === 'gameId' && this.inputValue.length < 8) {
+            this.inputValue += event.key;
+            this.inputField.setText(this.inputValue);
+            cursor.setPosition(this.inputField.x + this.inputField.width + 2, cursor.y);
+          } else if (this.inputMode === 'name' && this.inputValue.length < 15) {
+            this.inputValue += event.key;
+            this.inputField.setText(this.inputValue);
+            cursor.setPosition(this.inputField.x + this.inputField.width + 2, cursor.y);
+          }
         }
-      }
-    });
+      });
+    }
   }
   
   private async hostGame() {
@@ -500,6 +586,8 @@ export default class MenuScene extends Phaser.Scene {
   
   shutdown() {
     // Clean up event listeners
-    this.input.keyboard.off('keydown');
+    if (this.input.keyboard) {
+      this.input.keyboard.off('keydown');
+    }
   }
 } 
