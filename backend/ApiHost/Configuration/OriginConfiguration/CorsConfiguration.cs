@@ -59,6 +59,7 @@ public static class CorsConfiguration
                     policy
                         .AllowAnyOrigin()
                         .AllowAnyMethod()
+                        .SetIsOriginAllowed(_ => true) 
                         .AllowAnyHeader();
                 });
         });

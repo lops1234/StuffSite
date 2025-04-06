@@ -1,7 +1,5 @@
 using ApiHost;
 using ApiHost.Hubs;
-using ApiHost.Hubs.Services;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Scalar.AspNetCore;
 
@@ -13,27 +11,9 @@ LoggingConfiguration.ConfigureLogging(builder);
 DatabaseConfiguration.ConfigureDatabase(builder);
 AuthorizationConfiguration.ConfigureAuthorization(builder);
 CorsConfiguration.ConfigureCors(builder);
+SignalRConfiguration.ConfigureSignalR(builder);
 
-// Register SignalR services and configure for better performance
-builder.Services.AddSignalR(options => 
-{
-    // Configure SignalR options for better performance
-    options.MaximumReceiveMessageSize = 102400; // 100 KB
-    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
-    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
-    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
-})
-.AddJsonProtocol(options => 
-{
-    // Ignore null values in JSON to reduce payload size
-    options.PayloadSerializerOptions.DefaultIgnoreCondition = 
-        System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
-});
-
-// Register game services
-builder.Services.AddSingleton<ISnakeGameService, SnakeGameService>();
-
-builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, CustomAuthorizationFailureHandler>();
+RegisterServices.Register(builder);
 
 var app = builder.Build();
 ConfigureExceptionPage();
@@ -41,7 +21,6 @@ ConfigureHttps();
 ConfigureApiDocs();
 
 ConfigureCors();
-app.UseRouting();
 ConfigureAuthorization();
 
 // Enable serving static files
