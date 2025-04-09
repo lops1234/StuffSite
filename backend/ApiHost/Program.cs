@@ -1,5 +1,5 @@
 using ApiHost;
-using Microsoft.AspNetCore.Authorization;
+using ApiHost.Hubs;
 using Microsoft.AspNetCore.Identity;
 using Scalar.AspNetCore;
 
@@ -11,8 +11,9 @@ LoggingConfiguration.ConfigureLogging(builder);
 DatabaseConfiguration.ConfigureDatabase(builder);
 AuthorizationConfiguration.ConfigureAuthorization(builder);
 CorsConfiguration.ConfigureCors(builder);
+SignalRConfiguration.ConfigureSignalR(builder);
 
-builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, CustomAuthorizationFailureHandler>();
+RegisterServices.Register(builder);
 
 var app = builder.Build();
 ConfigureExceptionPage();
@@ -22,6 +23,15 @@ ConfigureApiDocs();
 ConfigureCors();
 ConfigureAuthorization();
 
+// Enable serving static files
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
+// Add a simple endpoint to test if the API is running
+app.MapGet("/api/ping", () => "Pong! Server is running");
+
+// Map SignalR hub
+app.MapHub<SnakeGameHub>("/hubs/snake");
 
 var summaries = new[]
 {
@@ -89,8 +99,6 @@ void ConfigureAuthorization()
     // app.UseAuthorization();
     // app.MapScalarApiReference().RequireAuthorization();
 }
-
-
 
 record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {
