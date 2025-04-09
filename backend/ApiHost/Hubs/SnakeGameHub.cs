@@ -195,8 +195,7 @@ public class SnakeGameHub : Hub
         }
     }
     
-    private async void UpdateGameCallback(object? state)
-    {
+    private async Task UpdateGameCallbackAsync(object? state)
         if (state == null) return;
         
         string gameId = (string)state;
