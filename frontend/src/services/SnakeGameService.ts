@@ -89,6 +89,7 @@ class SnakeGameService {
 
   private createConnection(): void {
     // API URL from environment variable
+    console.log('Test url: ' + import.meta.env.VITE_API_URL );
     const apiUrl = import.meta.env.VITE_API_URL || 'https://localhost:7039';
     console.log('Using API URL:', apiUrl);
     
