@@ -9,7 +9,7 @@ public class SnakeGameHub : Hub
     private readonly ISnakeGameService _gameService;
     private readonly ILogger<SnakeGameHub> _logger;
     private readonly IHubContext<SnakeGameHub> _hubContext;
-    private static readonly SemaphoreSlim _lock = new(1, 1);
+// Removed unused static field _lock
     
     // Timer to clean up inactive games
     private static Timer? _cleanupTimer;
